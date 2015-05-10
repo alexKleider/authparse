@@ -94,7 +94,7 @@ from ipwhois import IPWhois
 VERSION = "v0.0.0"
 # other constants
 DummyIP = '0.0.0.0'
-LOG = "log"  # Used by select_logs function.
+LOG = "log"  # Used by FileNameCollector class.
 # To retrieve (ipv4) IP addresses from a line:
 _IP_EXP = \
 r"""
@@ -175,7 +175,8 @@ class FileNameCollector(object):
     A named parameter <restrict2logs> can be set to True if
     one wants to include only files with names containing the
     string defined by the constant LOG.
-    Uses function select_logs(files).
+    Has its own include(self, f_name) method => Boolean
+    which checks status of <restrict2logs>.
     """
     def __init__(self, restrict2logs=False):
         self.file_names = []
