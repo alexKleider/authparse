@@ -38,7 +38,7 @@ VERSION = "v0.0.0"
 # global variables
 
 # invalid_user, no_id, break_in, pub_key, closed, disconnect, listening
-log_dict = dict(
+test_lines = dict(
     invalid_user = (
 'Mar  9 08:12:51 localhost sshd[4522]: Invalid user postgres from 202.153.165.67'),
     no_id = (
@@ -52,19 +52,36 @@ log_dict = dict(
     disconnect = (
 'Mar  9 08:12:56 localhost sshd[4526]: Received disconnect from 202.153.165.67: 11: Bye Bye [preauth]'),
     listening = (
-''),
-    # Couldn't find a 'Server listening on' line. 
+'Apr 26 00:24:58 dogpatch sshd[12643]: Server listening on 0.0.0.0 port 22.'),
     not_allowed = (
 "Apr 26 19:04:31 localhost sshd[16553]: User root from 222.186.134.98 not allowed because none of user's groups are listed in AllowGroups"),
       )
+test_line0 = "There is no IP address in this line."
+test_line1 = (
+'Mar  9 08:12:51 localhost sshd[4522]: Invalid user apache from 202.153.165.67')
+test_line2 = (
+'May  7 00:09:12 dogpatch sshd[3404]: Invalid user india from 191.237.2.80')
+test_line3 = (
+'May  6 23:37:57 dogpatch sshd[3392]: Invalid user romanian from 191.237.2.80')
+test_line4 = (
+'May  6 22:35:17 dogpatch sshd[3346]: Invalid user brazil from 191.237.2.80')
+test_line5 = (
+'May  6 20:58:22 dogpatch sshd[3273]: Did not receive identification string from 69.236.60.35')
+test_line5 = (
+'Apr 26 01:20:32 dogpatch sshd[14415]: Accepted publickey for alex from 10.0.0.21 port 33859 ssh2')
+test_line5 = (
+'Apr 26 01:20:17 dogpatch sshd[14409]: Accepted publickey for alex from 10.0.0.21 port 33850 ssh2')
 
+ip_set = set(('202.153.165.67', '1.93.29.129', '87.106.173.118',
+        '76.191.204.54', '61.174.51.208', '202.153.165.67',
+        '222.186.134.98', '0.0.0.0'))
 # custom exception types
 # private functions and classes
 # public functions and classes
 class InfoTest(unittest.TestCase):
     """Tests VERSION,
             _IP_EXP
-            get_ip_info
+            get_ip_demographics
     """
     test_ips = ["76.191.204.54",   # by Sonic.net dhcp in Bolinas
 # Commented out to save time.
@@ -72,26 +89,27 @@ class InfoTest(unittest.TestCase):
 #              "204.14.156.167",   # by WebPass in San Francisco
 #              "89.18.173.13",     # by pcExtreme in Amsterdam
                         ]
-    def test_version(self):
+    def test_version_authparse(self):
         self.assertEqual(VERSION, authparse.VERSION)
+    def test_version_support(self):
         self.assertEqual(VERSION, support.VERSION)
-    def test_get_ip_info(self):
+    def test_get_ip_demographics(self):
         ips = InfoTest.test_ips
         for ip in ips:
-            ip_info = authparse.get_ip_info(ip)
+            ip_info = authparse.get_ip_demographics(ip)
             self.assertEqual(ip_info['ip'], ip)
             pprint(ip_info)
     def test_IP_EXP(self):
         line = (
         'My IP in Bolinas is 76.191.204.54 provided by Sonic.net.')
         regex = re.compile(authparse._IP_EXP, re.VERBOSE)
-        self.assertRegexpMatches(line, regex)
+        self.assertRegex(line, regex)
 
 class LineTest(unittest.TestCase):
     """Tests get_list_of_ips, 
             get_log_info
     """
-    def test_get_list_of_ips(self):
+    def test_get_list_of_ips_on_random_data(self):
         for i in range(10):
             for n_ips in range(4):
                 rl = support.get_random_line(40 + i)
@@ -101,46 +119,79 @@ class LineTest(unittest.TestCase):
                                 support.random_locations(n_ips, 40))
                 list_of_ips = authparse.get_list_of_ips(test_line)
                 self.assertEqual(len(list_of_ips), n_ips)
-    def test_get_log_info(self):
-        res = authparse.get_log_info(log_dict['invalid_user'])
-        self.assertEqual(res[0], 'invalid_user')
-        self.assertEqual(res[1]["user"][0], "postgres")
-        res = authparse.get_log_info(log_dict['no_id'])
-        self.assertEqual(res[0], 'no_id')
-        print(res[1])
-        self.assertEqual(res[1], {})
-        res = authparse.get_log_info(log_dict['break_in'])
-        self.assertEqual(res[0], 'break_in')
-        self.assertEqual(res[1], {})
-        res = authparse.get_log_info(log_dict['pub_key'])
-        self.assertEqual(res[0], 'pub_key')
-        self.assertEqual(res[1]["user"][0], "alex")
-        res = authparse.get_log_info(log_dict['closed'])
-        self.assertEqual(res[0], 'closed')
-        self.assertEqual(res[1], {})
-        res = authparse.get_log_info(log_dict['disconnect'])
-        self.assertEqual(res[0], 'disconnect')
-        self.assertEqual(res[1], {})
-    #   res = authparse.get_log_info(log_dict['listening'])
-    #   self.assertEqual(res[0], 'listening')
-    #   self.assertEqual(res[1], {'server'})
-        res = authparse.get_log_info(log_dict['not_allowed'])
-        self.assertEqual(res[0], 'not_allowed')
-        self.assertEqual(res[1]["user"][0], "root")
+    def test_get_list_of_ips_on_line1(self):
+        list_of_ips = authparse.get_list_of_ips(test_line1)
+        self.assertEqual(list_of_ips[0], '202.153.165.67')
+    def test_get_ip_on_test_lines(self):
+        list = []
+        for key in test_lines:
+            list.append(authparse.get_ip(test_lines[key]))
+        self.assertEqual(set(list), ip_set)
+    def test_get_ip_on_line1(self):
+        ip = authparse.get_ip(test_line1)
+        self.assertEqual(ip, '202.153.165.67')
+    def test_get_ip_on_line0(self):
+        ip = authparse.get_ip(test_line0)
+        self.assertEqual(ip, authparse.DummyIP)
+    def test_get_log_info_invalid_user(self):
+        res = authparse.get_log_info(test_lines['invalid_user'])
+        self.assertEqual((res.line_type, res.key_, res.value, ),
+                        ('invalid_user', 'user', "postgres"))
+    def test_get_log_info_no_id(self):
+        res = authparse.get_log_info(test_lines['no_id'])
+        self.assertEqual((res.line_type, res.key_, res.value, ),
+                        ('no_id', None, None, ))
+    def test_get_log_info_break_in(self):
+        res = authparse.get_log_info(test_lines['break_in'])
+        self.assertEqual((res.line_type, res.key_, res.value, ),
+                        ('break_in', None, None, ))
+    def test_get_log_info_pub_key(self):
+        res = authparse.get_log_info(test_lines['pub_key'])
+        self.assertEqual((res.line_type, res.key_, res.value, ),
+                        ('pub_key', 'user', "alex"))
+    def test_get_log_info_closed(self):
+        res = authparse.get_log_info(test_lines['closed'])
+        self.assertEqual((res.line_type, res.key_, res.value, ),
+                        ('closed', None, None, ))
+    def test_get_log_info_disconnect(self):
+        res = authparse.get_log_info(test_lines['disconnect'])
+        self.assertEqual((res.line_type, res.key_, res.value, ),
+                        ('disconnect', None, None, ))
+#   def test_get_log_info_listening(self):
+    #   res = authparse.get_log_info(test_lines['listening'])
+    #   self.assertEqual((res.line_type, res.key_, res.value, ),
+    #                   ('listening', 'server', '???', ))
+    def test_get_log_info_not_allowed(self):
+        res = authparse.get_log_info(test_lines['not_allowed'])
+        self.assertEqual((res.line_type, res.key_, res.value, ),
+                        ('not_allowed', 'user', "root"))
 
 class FilesTest(unittest.TestCase):
-    """Tests: select_logs
+    """Tests: FileNameCollector
     """
-    test_list_of_logfiles = ['a.log', 'auth.log', 'auth.log.1',
-                            'auth.log.2', 'auth.log.3',
-                            'auth.log.4', 'fail.log', 'beaware',]
-    def test_select_logs(self):
-        file_names = FilesTest.test_list_of_logfiles
-        files = authparse.select_logs(file_names)
-        non_log = ['beaware',]
-        qualified = (
-        [name for name in file_names if not name in non_log])
-        self.assertEqual(files, qualified)
+    test_dir = '/home/alex/Py/Logparse/DD/Logs'
+    test_list_of_lognames = []
+    with open('lognames', 'r')as f:
+        for line in f:
+            test_list_of_lognames.append(line.strip())
+    test_list_of_allfiles = []
+    for line in open('allfiles', 'r'):
+        test_list_of_allfiles.append(line.strip())
+    def test_FileNameCollector_include(self):
+        collector = authparse.FileNameCollector(True)
+        self.assertTrue(collector.include("file.log"))
+        print("How is restrict2logs set?")
+        self.assertFalse(collector.include("file.without.extension"))
+    def test_FileNameCollector_default(self):
+        collector = authparse.FileNameCollector()
+        collector.add2list_of_file_names(FilesTest.test_dir)
+        self.assertEqual(set(collector.file_names),
+                                    set(FilesTest.test_list_of_allfiles))
+    def test_FileNameCollector_restricted(self):
+        collector = authparse.FileNameCollector(restrict2logs=True)
+        collector.add2list_of_file_names(FilesTest.test_dir)
+        self.assertEqual(set(collector.file_names),
+                                    set(FilesTest.test_list_of_lognames))
 
 class ArgsTest(unittest.TestCase):
     """Test the command line argument/docopt componenet:
@@ -189,7 +240,7 @@ class TestFileNameCollector(unittest.TestCase):
             it's add2list_of_file_names method,
             and it's file_names attribute.
     """
-    def test_dir_of_logs0(self):
+    def test_dir_of_logs_default(self):
         cmd ="argparser.py -i '~/Py/Logparse/DD/Logs' -o output.txt" 
         c_l_args = shlex.split(cmd)
         args = docopt(authparse.__doc__,
@@ -197,10 +248,15 @@ class TestFileNameCollector(unittest.TestCase):
                         help=True,
                         version=VERSION,
                         options_first=False)
+        self.assertEqual(args['--input'], ['~/Py/Logparse/DD/Logs'])
         log_file_collector = authparse.FileNameCollector()
+        print("#Just initialized 'log_file_collector'.")
         for dir_or_file in args["--input"]:
+            print("#Iterating thru args['--input'], expect just 1 pass.")
             log_file_collector.add2list_of_file_names(dir_or_file)
-        self.assertEqual(sorted(log_file_collector.file_names), sorted([
+        print("#log_file_collector contains: {}"
+                    .format(log_file_collector.file_names))
+        self.assertEqual(set(log_file_collector.file_names), set([
             "/home/alex/Py/Logparse/DD/Logs/a.log",
             "/home/alex/Py/Logparse/DD/Logs/auth.log",
             "/home/alex/Py/Logparse/DD/Logs/auth.log.1",
@@ -214,9 +270,18 @@ class TestFileNameCollector(unittest.TestCase):
             "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog1/subsub1.log",
             "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog1/subsub1.log.1",
                 ]))
+    def test_dir_of_logs_true(self):
+        cmd ="argparser.py -i '~/Py/Logparse/DD/Logs' -o output.txt" 
+        c_l_args = shlex.split(cmd)
+        args = docopt(authparse.__doc__,
+                        argv=c_l_args[1:],
+                        help=True,
+                        version=VERSION,
+                        options_first=False)
         log_file_collector = authparse.FileNameCollector(True)
-        log_file_collector.add2list_of_file_names(dir_or_file)
-        self.assertEqual(sorted(log_file_collector.file_names), sorted([
+        for dir_or_file in args["--input"]:
+            log_file_collector.add2list_of_file_names(dir_or_file)
+        self.assertSequenceEqual(sorted(log_file_collector.file_names), sorted([
             "/home/alex/Py/Logparse/DD/Logs/a.log",
             "/home/alex/Py/Logparse/DD/Logs/auth.log",
             "/home/alex/Py/Logparse/DD/Logs/auth.log.1",
@@ -230,8 +295,60 @@ class TestFileNameCollector(unittest.TestCase):
             "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog1/subsub1.log.1",
                 ]))
 
+class data_collection(unittest.TestCase):
+    def test_add2ip_info1(self):
+        ip_info = authparse.IpInfo()
+        line_info0 = authparse.LineInfo(test_lines['invalid_user'])
+        line_info1 = authparse.LineInfo(test_line1)
+        line_info2 = authparse.LineInfo(test_line2)
+        line_info3 = authparse.LineInfo(test_line3)
+        line_info4 = authparse.LineInfo(test_line4)
+        ip_info.add_entry(line_info0)
+        ip_info.add_entry(line_info1)
+        ip_info.add_entry(line_info2)
+        ip_info.add_entry(line_info3)
+        ip_info.add_entry(line_info4)
+        self.assertEqual(ip_info.data['invalid_user'], ["postgres",
+        "apache", "india", "romanian", "brazil", ])
+
+    def test_add2ip_dict(self):
+        ip_set = set()
+        ip = "10.0.0.10"
+        ip_set.add(ip)
+        master = authparse.IpDict()
+        master.add_data(ip,
+                authparse.LineInfo(test_lines['invalid_user']))
+        self.assertEqual(master.data[ip].data['invalid_user'],
+                ['postgres'])
+        master.add_data(ip,
+                authparse.LineInfo(test_line1))
+        self.assertEqual(master.data[ip].data['invalid_user'],
+                ['postgres', 'apache', ])
+        master.add_data(ip,
+                authparse.LineInfo(test_lines['no_id']))
+        self.assertEqual(master.data[ip].data['no_id'],
+                1)
+        ip = "10.1.0.10"
+        ip_set.add(ip)
+        master.add_data(ip,
+                authparse.LineInfo(test_lines['no_id']))
+        self.assertEqual(master.data[ip].data['no_id'],
+                1)
+        self.assertEqual(set([key for key in master.data]),
+                        ip_set)
+        pass
+
+
+    def test_master_dict(self):
+        master = authparse.IpDict()
+        for key in test_lines:
+            ip = authparse.get_ip(test_lines[key])
+            master.add_data(ip, authparse.LineInfo(test_lines[key]))
+        keys = set([key for key in master.data])
+        self.assertEqual(keys, ip_set)
+
 # main function
 #
 if __name__ == '__main__':  # code block to run the application
-    pass
+    unittest.main()
 

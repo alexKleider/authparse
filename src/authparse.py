@@ -93,6 +93,8 @@ from ipwhois import IPWhois
 # metadata such as version number
 VERSION = "v0.0.0"
 # other constants
+DummyIP = '0.0.0.0'
+LOG = "log"  # Used by select_logs function.
 # To retrieve (ipv4) IP addresses from a line:
 _IP_EXP = \
 r"""
@@ -105,50 +107,50 @@ SPoL = dict(
     invalid_user = dict(
         re =  r"""Invalid user (?P<user>\S+) from """,
         header_text =  "'auth.log' reporting 'invalid user's:",
-        keys =  ["user"]
+        key_ =  "user"
         ),
     no_id = dict(
-        re =  (r"""Did not receive identification string from \S+"""),
+        re =  (r"""Did not receive identification string from """),
         header_text =  "'auth.log' reporting 'no id's:",
-        keys =   []
+        key_ =   None
         ),
     break_in = dict(
-        re =  r"POSSIBLE BREAK-IN ATTEMPT!",
+        re =  r"POSSIBLE BREAK-IN ATTEMPT!",  # Not in logs of dogpatch.
         header_text =  (
             "'auth.log' reporting 'POSSIBLE BREAK-IN ATTEMPT!'s:"),
-        keys =   []
+        key_ =   None
         ),
     pub_key = dict(
         re =  r""" Accepted publickey for (?P<user>\S+)""",
         header_text =  "'auth.log' reporting ''s:",
-        keys =   ["user"]
+        key_ = "user"
         ),
     closed = dict(
         re =  r""" Connection closed by \S+""",
         header_text =  "'auth.log' reporting 'closed's:",
-        keys =   []
+        key_ = None
         ),
     disconnect = dict(
         re =  (
                 r""" Received disconnect from """),
         header_text =  (
                 "'auth.log' reporting 'Received disconnect from's:"),
-        keys =   []
+        key_ = None
         ),
     listening = dict(
         re =  r""" Server listening on (?P<listener>.+)""",
         header_text =  "'auth.log' reporting 'Server listening on's:",
-        keys =   ["listener"]
+        key_ = "listener"
         ),
-    not_allowed = dict(
+    not_allowed = dict(   # Not in logs of dogpatch.
         re = r""" User (?P<user>\S+) from (?:\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) not allowed because none """,
         header_text = "'auth.log' reporting ''s:",
-        keys = ["user"]
+        key_ = "user"
         ),
     unrecognized = dict(  # Besure this key is alphabetically last!
         re = ".*",
         header_text = "Unrecognized line.",
-        keys = []
+        key_ = None
         ),
     )
 
@@ -157,83 +159,160 @@ _line_types = sorted(SPoL)
 # invalid_user, no_id, break_in, pub_key,
 # closed, disconnect, listening, not_allowed
 # unrecognized
-# noip
+# Was going to include noip but decided to keep presence or absence of
+# IP at a separate level.
 
 for key in _line_types:
-    SPoL[key]['search4'] = re.compile(SPoL[key]['re'])
+    SPoL[key]['search4'] = re.compile(SPoL[key]['re']).search
 
 # custom exception types  (I have none)
 # private functions and classes
 # public functions and classes
 
 class FileNameCollector(object):
+    """Maintains a list of file names by providing an
+    <add2list_of_file_names> method.
+    A named parameter <restrict2logs> can be set to True if
+    one wants to include only files with names containing the
+    string defined by the constant LOG.
+    Uses function select_logs(files).
+    """
     def __init__(self, restrict2logs=False):
         self.file_names = []
         self.restrict2logs = restrict2logs
+    def include(self, f_name):
+        if self.restrict2logs and not(LOG in f_name):
+            return False
+        else:
+            return True
     def add2list_of_file_names(self, f_or_dir_name):
-        f_or_dir_name = os.path.abspath(
+        f_or_dir_full_name = os.path.abspath(
                             os.path.expanduser(
                                 f_or_dir_name))
-        if os.path.isfile(f_or_dir_name):
-            self.file_names.append(f_or_dir_name)
-        elif os.path.isdir(f_or_dir_name):
-            for path, dirs, files in os.walk(f_or_dir_name):
-                if self.restrict2logs:
-                    restricted_files = select_logs(files)
-                else:
-                    restricted_files = files
-                for f in restricted_files:
-                    self.file_names.append(os.path.join(path, f))
+        if os.path.isfile(f_or_dir_full_name):
+            if self.include(f_or_dir_name):
+                self.file_names.append(f_or_dir_full_name)
+        elif os.path.isdir(f_or_dir_full_name):
+            for path, __dirs, files in os.walk(f_or_dir_full_name):
+                for f in files:
+                    if self.include(f):
+                        self.file_names.append(os.path.join(path, f))
         else:
             print(
-            "Non-existing file name passed to FileNameCollector method.")
+            "File '{}' doesn't exist.".format(f_or_dir_full_name))
 
-class Ip_Info(object):
+class LineInfo(object):
+    """Each instance has the following attributes...
+        line_type: one of the keys of SPoL.
+        key_: possibly None.
+            currently, possible keys are 'user', 'listener', ..
+        value: name matched by key_, None if key_ is None
+            NOTE: in the IP_Info class instance,
+            the corresponding value is a list of values
+            or a counter.
+    """
+    def __init__(self, line):
+        """Accepts a line of text and returns an instance.
+        Provides support for get_log_info(line)
+        If <line> is None, returns an 'unrecognized' instance.
+        """
+        self.line_type = 'unrecognized'
+        self.key_ = None
+        self.value = None
+        if line != None:
+            for line_type in _line_types:
+                match_obj = SPoL[line_type]['search4'](line)
+                if match_obj:  # 'search': expect 0 or 1 match object.
+                    self.line_type = line_type
+                    self.key_ = SPoL[line_type]['key_']
+                    if self.key_:
+                        self.value = match_obj.group(
+                                    SPoL[line_type]['key_'])
+                    break  # Assume a line can only be of 1 type.
+
+class IpInfo(object):
     """An instance of this type is used to collect information about
     each IP address that appears in the log (/var/log/authlog) files.
-    It is a dict keyed by the IP address.
-    Each value is also a dict keyed by the contents of _line_types
-    derived from SPoL in which it
-    appeared. Note there is also an "unrecognized" line type, the default
-    if none of the others match.
-    The corresponding value for each of these keys is a list, one for
-    each time that line type was encountered.  The list contents are in
-    turn a list of the values, often empty.  Summing the number of
-    lists for each line type provides a count for each IP address.
-    {ipaddr: 
-        {line_type:
-            { # dict, often empty, currently never > 1 key.
-            key(so far only "user" or "listener"):
-                    [list of names or other info bits],
-            }
-        }
-    }
+    Instances are kept in a dict keyed by the IP address and 
+    consist of a dict keyed by line_type.
+    Note: the ip address itself is not part of the instance.
+    For line_type(s) with a string as key, the value is a list.
+    For those with a key of None, the value is an integer counter.
     """
     def __init__(self):
-        data = {}
-    def add_entry(self, ip, info):
-        """<ip> is an IP address- key in top level of <data>.
-        <info> is the tuple returned by <get_log_info>:
-            [0]: line_type
-            [1]: group_dict: (often empty)
-                key (if any): ('user', 'listener', ...)
-                The value of each key is added to the list of values
-                for the corresponding key 
+        self.data = {}
+    def add_entry(self, line_info):
+        """<line_info> is expected to be an instance of LineInfo.
         """
-        pass
+        if line_info.key_:
+            __0 = self.data.setdefault(line_info.line_type,
+                                    [])
+            self.data[line_info.line_type].append(line_info.value)
+        else:
+            entry = self.data.setdefault(line_info.line_type, 0)
+            self.data[line_info.line_type] += 1
 
+class IpDict():
+    """An instance is used to maintain all information gleaned from
+    the log files, indexed by IP address.
+    """
+    def __init__(self):
+        self.data = {}
+    def add_data(self, ip_address, ip_info):
+        """Adds information from an instance of LineInfo into it's
+        dictionary, creating an instance of IpInfo if needed.
+        """
+        __0 = self.data.setdefault(ip_address, IpInfo())
+        self.data[ip_address].add_entry(ip_info)
+
+# Overview:
+#  The top level data structure is one instance of IpDict:
+#  a dictionary keyed by Ip addresses, values are instances of IpInfo.
+# <line_info> entries are made using the add_entry method of IpInfo.
 
 def get_args():
+    """Uses docopt to return command line arguments.
+    """
     return docopt(__doc__, version=VERSION)
 
 def get_list_of_ips(line):
     """Returns a list (possibly empty) of all ipv4 addresses found in
-    the line.
+    the line. Simply calls _findall_ips(line).
     """
     return _findall_ips(line)
 
+def get_ip(line):
+    """Returns an IP address. 
+    Uses _IP_EXP regex to find all matches in the line.
+    Returns the first one if there are any, if not
+    it returns the string designated by the constant DummyIP.
+    """
+    l = _findall_ips(line)
+    if l:
+        return l[0]
+    else:
+        return DummyIP
 
-def get_ip_info(ip_addr, NO_INFO = "NO_INFO"):
+class IpDemographics(object):
+    """Instances discover and keep demographics of an IP address
+    provided to the __init__ as a dotted quad."""
+    def __init__(self, ip_addr, NO_INFO="unavailable"):
+        obj = IPWhois(ip_addr)
+        all_ip_info = obj.lookup()
+        nets = all_ip_info['nets'][0]
+        self.data = dict(
+                ip = all_ip_info.setdefault('query', NO_INFO),
+                address = nets.setdefault('address', NO_INFO),
+                city= nets.setdefault('city', NO_INFO),
+                country = nets.setdefault('country', NO_INFO),
+                description = nets.setdefault('description', NO_INFO),
+                state = nets.setdefault('state', NO_INFO),
+                )
+    def __repr__(self):
+        return """IP {ip}: {description}
+    {address}, {city}, {state}, {country}""".format(**self.data)
+
+def get_ip_demographics(ip_addr, NO_INFO = "NO_INFO"):
     """First parameter must be an IP address (as a dotted quad.)
     Returns a dictionary with the following keys:
         ip, description, city, address, state, country.
@@ -254,37 +333,9 @@ def get_ip_info(ip_addr, NO_INFO = "NO_INFO"):
 
 def get_log_info(line):
     """<line> is assumed to be a log file line.
-    Returns a tuple: line_type, data_gleaned.  
-        line_type: one of the keys of SPoL.
-        group_dic: a dictionary, possibly empty.
-             Currently there is never >1 item in the dictionary.
-             Possible keys are 'user', 'listener', ..
-             and only one value each. NOTE: in the IP_Info class
-             instance, the corresponding value is a list of values
-             collected by this procedure.
-    !!!Returns None if line is not a recognized log entry.
+    Returns an instance of LineInfo class. Simply returns LineInfo(line)
     """
-    for line_type in _line_types :  # Assume a line can only be of 1 type.
-        search_result = SPoL[line_type]['search4'].search(line)
-        if search_result:  # Used search so will get 0 or 1 match object.
-            group_dic = {}
-            info_provided = SPoL[line_type]['keys']
-            for item in info_provided:  # May well be none.
-                group_dic[item] = search_result.groups(item)
-            return (line_type, group_dic, )
-
-def select_logs(list_of_files):
-    return [f_name for f_name in list_of_files if 'log' in f_name]
-
-def get_list_of_file_names(list_of_sources):
-    """
-    The parameter is an iterable of file (regular or directory) names.
-    Returned is a list of the full path names of all files.
-    """
-    file_name_collector = FileNameCollector()
-    for f_or_dir in list_of_sources:
-        file_name_collector.add2list_of_file_names(f_or_dir)
-    return file_name_collector.file_names
+    return LineInfo(line)
 
 def get_ips(list_of_sources):
     """
@@ -303,28 +354,33 @@ def get_ips(list_of_sources):
                     ret.append(ip)
     return ret
 
-def get_ips_with_info(list_of_sources):
+def store_ip_info(ip, ip_info, master_ip_dict):
+    """First parameter is an IP address to serve as the index into the
+    third parameter.
+    Second parameter is an instance of IpInfo which 
+    is stored in <master_ip_dict> (an instance of IpDict) indexed by <ip>.
+    DON'T NEED THIS- CAN USE IpDict method add_data.
     """
-    Parameter is an iterable of file (regular or directory) names.
-    Returned is a dict keyed by the first (if any) IP address found
-    in any line contained in the files.  Each key's value is an 
-    instance of IpInfo.
-    The parameter is typically the list of log files to analyse.
+    entry = master_ip_dict.setdefault(ip, )
+    master_ip_dict.add_data(ip, line_info)
+
+def move_info_sources2master(list_of_sources, master_ip_dict):
     """
-    ret = {}
+    First parameter is an iterable of file (reg or dir) names
+    (typically the list of log files to analyse) from which new
+    information is gathered and added to <master_ip_dict>,
+    an instance of IpDict.
+    """
     f_names = get_list_of_file_names(list_of_sources)
     for f_name in f_names:
         for line in open(f_name, 'r'):
             ips = _findall_ips(line)
             if ips:
                 ip = ips[0]
-                data = get_log_info(line)
-                if data:
-                    line_type, group_dict = data
-                else:
-                    line_type = 'unrecognized'
-                    group_dict = None
-    pass
+                line_info = get_log_info(line)  # LineInfo instance.
+            else:
+                ip = NON_IP
+                line_info = LineInfo(None)
 
 # main function
 def main():
@@ -338,7 +394,48 @@ def main():
     for fname in args["--in"]:
         logs_collector.add2list_of_file_names(fname)
 
-#
-if __name__ == '__main__':  # code block to run the application
-    ip_info = get_ip_info('76.191.204.54')
+def test_get_ip_demographics():
+    ip_info = get_ip_demographics('76.191.204.54')
     pprint(ip_info)
+
+def debug_re():
+    regex =  r"""Invalid user (?P<user>\S+) from """
+    test_line = (
+'Mar  9 08:12:51 localhost sshd[4522]: Invalid user postgres from 202.153.165.67')
+    pattern_obj = re.compile(regex)
+    search_func = pattern_obj.search
+    match_obj = search_func(test_line)
+    if match_obj:
+        print('There is a match.')
+    print(match_obj.group('user'))
+    print(search_func(test_line).group('user'))  # param is a key
+    print(search_func(test_line).groups())
+    for key_ in search_func(test_line).groups():  # returns values
+        print(key_)                               # NOT keys!
+#       print(search_func(test_line).group(key_)) # so this crashes.
+    inst = LineInfo(test_line)
+    print("{}: {}: {}".format(inst.line_type, inst.key_, inst.value))
+    pass
+
+def test_include():
+    collector = FileNameCollector()
+    if collector.include("file.log"):
+        print("'file.log' returns True")
+    else:
+        print("'file.log' returns False")
+    collector = FileNameCollector(True)
+    if collector.include("filenamealone"):
+        print("'filenamealone' returns True")
+    else:
+        print("'filenamealone' returns False")
+
+def test_IpDemographics():
+    DaveAngel = '74.208.58.210'
+    info = IpDemographics(DaveAngel)
+    print(info)
+
+if __name__ == '__main__':  # code block to run the application
+#   test_include()
+    test_IpDemographics()
+    pass
+#   debug_re()
