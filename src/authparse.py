@@ -201,6 +201,12 @@ class FileNameCollector(object):
             print(
             "File '{}' doesn't exist.".format(f_or_dir_full_name))
 
+# Overview:  (of the next three Class declarations)
+#  The top level data structure is one instance of IpDict:
+#  a dict keyed by Ip addresses with values instances of IpInfo.
+# <line_info> entries are made using the add_entry method of IpInfo
+# instances of which are themselves dictionaries keyed by _line_types.
+
 class LineInfo(object):
     """Each instance has the following attributes...
         line_type: one of the keys of SPoL.
@@ -254,7 +260,8 @@ class IpInfo(object):
 
 class IpDict():
     """An instance is used to maintain all information gleaned from
-    the log files, indexed by IP address.
+    the log files, and is typically a value indexed by IP address
+    within an IpInfo instance.
     """
     def __init__(self):
         self.data = {}
@@ -265,10 +272,31 @@ class IpDict():
         __0 = self.data.setdefault(ip_address, IpInfo())
         self.data[ip_address].add_entry(ip_info)
 
-# Overview:
-#  The top level data structure is one instance of IpDict:
-#  a dictionary keyed by Ip addresses, values are instances of IpInfo.
-# <line_info> entries are made using the add_entry method of IpInfo.
+class IpDemographics(object):
+    """Instances discover and keep demographics of an IP address
+    provided to the __init__ as a dotted quad."""
+    def __init__(self, ip_addr, NO_INFO="unavailable"):
+        obj = IPWhois(ip_addr)
+        all_ip_info = obj.lookup()
+        nets = all_ip_info['nets'][0]
+        self.data = dict(
+                ip = all_ip_info.setdefault('query', NO_INFO),
+                address = nets.setdefault('address', NO_INFO),
+                city= nets.setdefault('city', NO_INFO),
+                country = nets.setdefault('country', NO_INFO),
+                description = nets.setdefault('description', NO_INFO),
+                state = nets.setdefault('state', NO_INFO),
+                )
+        for k in self.data:  # Remove line breaks from within fields.
+            ss = self.data[k].split('\n')
+            s = ', '.join(ss)
+            self.data[k] = s
+    def __repr__(self):
+        return """IP {ip}: {description}
+    {address}, {city}, {state}, {country}""".format(**self.data)
+    @property
+    def get_data(self):
+        return self.data
 
 def get_args():
     """Uses docopt to return command line arguments.
@@ -292,44 +320,6 @@ def get_ip(line):
         return l[0]
     else:
         return DummyIP
-
-class IpDemographics(object):
-    """Instances discover and keep demographics of an IP address
-    provided to the __init__ as a dotted quad."""
-    def __init__(self, ip_addr, NO_INFO="unavailable"):
-        obj = IPWhois(ip_addr)
-        all_ip_info = obj.lookup()
-        nets = all_ip_info['nets'][0]
-        self.data = dict(
-                ip = all_ip_info.setdefault('query', NO_INFO),
-                address = nets.setdefault('address', NO_INFO),
-                city= nets.setdefault('city', NO_INFO),
-                country = nets.setdefault('country', NO_INFO),
-                description = nets.setdefault('description', NO_INFO),
-                state = nets.setdefault('state', NO_INFO),
-                )
-    def __repr__(self):
-        return """IP {ip}: {description}
-    {address}, {city}, {state}, {country}""".format(**self.data)
-
-def get_ip_demographics(ip_addr, NO_INFO = "NO_INFO"):
-    """First parameter must be an IP address (as a dotted quad.)
-    Returns a dictionary with the following keys:
-        ip, description, city, address, state, country.
-    An alternative default value can be set in case the response
-    has no entry for one of the fields expected.
-    """
-    obj = IPWhois(ip_addr)
-    all_ip_info = obj.lookup()
-    nets = all_ip_info['nets'][0]
-    return dict(
-            ip = all_ip_info.setdefault('query', NO_INFO),
-            address = nets.setdefault('address', NO_INFO),
-            city= nets.setdefault('city', NO_INFO),
-            country = nets.setdefault('country', NO_INFO),
-            description = nets.setdefault('description', NO_INFO),
-            state = nets.setdefault('state', NO_INFO),
-            )
 
 def get_log_info(line):
     """<line> is assumed to be a log file line.

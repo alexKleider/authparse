@@ -81,7 +81,7 @@ ip_set = set(('202.153.165.67', '1.93.29.129', '87.106.173.118',
 class InfoTest(unittest.TestCase):
     """Tests VERSION,
             _IP_EXP
-            get_ip_demographics
+            IpDemographics
     """
     test_ips = ["76.191.204.54",   # by Sonic.net dhcp in Bolinas
 # Commented out to save time.
@@ -93,12 +93,12 @@ class InfoTest(unittest.TestCase):
         self.assertEqual(VERSION, authparse.VERSION)
     def test_version_support(self):
         self.assertEqual(VERSION, support.VERSION)
-    def test_get_ip_demographics(self):
+    def test_IpDemographics(self):
         ips = InfoTest.test_ips
         for ip in ips:
-            ip_info = authparse.get_ip_demographics(ip)
-            self.assertEqual(ip_info['ip'], ip)
-            pprint(ip_info)
+            ip_info = authparse.IpDemographics(ip)
+            self.assertEqual(ip_info.get_data['ip'], ip)
+#           pprint(ip_info)
     def test_IP_EXP(self):
         line = (
         'My IP in Bolinas is 76.191.204.54 provided by Sonic.net.')
@@ -180,7 +180,7 @@ class FilesTest(unittest.TestCase):
     def test_FileNameCollector_include(self):
         collector = authparse.FileNameCollector(True)
         self.assertTrue(collector.include("file.log"))
-        print("How is restrict2logs set?")
+#       print("How is restrict2logs set?")
         self.assertFalse(collector.include("file.without.extension"))
     def test_FileNameCollector_default(self):
         collector = authparse.FileNameCollector()
@@ -250,12 +250,8 @@ class TestFileNameCollector(unittest.TestCase):
                         options_first=False)
         self.assertEqual(args['--input'], ['~/Py/Logparse/DD/Logs'])
         log_file_collector = authparse.FileNameCollector()
-        print("#Just initialized 'log_file_collector'.")
         for dir_or_file in args["--input"]:
-            print("#Iterating thru args['--input'], expect just 1 pass.")
             log_file_collector.add2list_of_file_names(dir_or_file)
-        print("#log_file_collector contains: {}"
-                    .format(log_file_collector.file_names))
         self.assertEqual(set(log_file_collector.file_names), set([
             "/home/alex/Py/Logparse/DD/Logs/a.log",
             "/home/alex/Py/Logparse/DD/Logs/auth.log",
