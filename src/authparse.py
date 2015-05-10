@@ -90,8 +90,10 @@ from pprint import pprint
 # import custom modules
 from docopt import docopt
 from ipwhois import IPWhois
+
 # metadata such as version number
 VERSION = "v0.0.0"
+
 # other constants
 DummyIP = '0.0.0.0'
 LOG = "log"  # Used by FileNameCollector class.
@@ -101,7 +103,7 @@ r"""
 \b
 \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}
 """
-_findall_ips = re.compile(_IP_EXP, re.VERBOSE).findall
+
 # global variables
 SPoL = dict(
     invalid_user = dict(
@@ -154,20 +156,29 @@ SPoL = dict(
         ),
     )
 
-
 _line_types = sorted(SPoL)
-# invalid_user, no_id, break_in, pub_key,
-# closed, disconnect, listening, not_allowed
-# unrecognized
-# Was going to include noip but decided to keep presence or absence of
-# IP at a separate level.
+    # invalid_user, no_id, break_in, pub_key, closed,
+    # disconnect, listening, not_allowed, unrecognized
+    # Was going to include noip but decided to keep
+    # presence or absence of IP at a separate level:
+    # Use the string constant DummyIP as the indicator
+    # that no IP was discovered.  This functionality is
+    # implemented in public function get_ip(line).
 
 for key in _line_types:
     SPoL[key]['search4'] = re.compile(SPoL[key]['re']).search
 
 # custom exception types  (I have none)
+
 # private functions and classes
-# public functions and classes
+_findall_ips = re.compile(_IP_EXP, re.VERBOSE).findall
+
+def _get_args():
+    """Uses docopt to return command line arguments.
+    """
+    return docopt(__doc__, version=VERSION)
+
+# public functions and classes:
 
 class FileNameCollector(object):
     """Maintains a list of file names by providing an
@@ -299,11 +310,6 @@ class IpDemographics(object):
     def get_data(self):
         return self.data
 
-def get_args():
-    """Uses docopt to return command line arguments.
-    """
-    return docopt(__doc__, version=VERSION)
-
 def get_list_of_ips(line):
     """Returns a list (possibly empty) of all ipv4 addresses found in
     the line. Simply calls _findall_ips(line).
@@ -375,6 +381,7 @@ def move_info_sources2master(list_of_sources, master_ip_dict):
 
 # main function
 def main():
+    args = _get_args()
     white_collector = FileNameCollector()
     for fname in args["--white"]:
         white_collector.add2list_of_file_names(fname)
@@ -385,48 +392,5 @@ def main():
     for fname in args["--in"]:
         logs_collector.add2list_of_file_names(fname)
 
-def test_get_ip_demographics():
-    ip_info = get_ip_demographics('76.191.204.54')
-    pprint(ip_info)
-
-def debug_re():
-    regex =  r"""Invalid user (?P<user>\S+) from """
-    test_line = (
-'Mar  9 08:12:51 localhost sshd[4522]: Invalid user postgres from 202.153.165.67')
-    pattern_obj = re.compile(regex)
-    search_func = pattern_obj.search
-    match_obj = search_func(test_line)
-    if match_obj:
-        print('There is a match.')
-    print(match_obj.group('user'))
-    print(search_func(test_line).group('user'))  # param is a key
-    print(search_func(test_line).groups())
-    for key_ in search_func(test_line).groups():  # returns values
-        print(key_)                               # NOT keys!
-#       print(search_func(test_line).group(key_)) # so this crashes.
-    inst = LineInfo(test_line)
-    print("{}: {}: {}".format(inst.line_type, inst.key_, inst.value))
-    pass
-
-def test_include():
-    collector = FileNameCollector()
-    if collector.include("file.log"):
-        print("'file.log' returns True")
-    else:
-        print("'file.log' returns False")
-    collector = FileNameCollector(True)
-    if collector.include("filenamealone"):
-        print("'filenamealone' returns True")
-    else:
-        print("'filenamealone' returns False")
-
-def test_IpDemographics():
-    DaveAngel = '74.208.58.210'
-    info = IpDemographics(DaveAngel)
-    print(info)
-
 if __name__ == '__main__':  # code block to run the application
-#   test_include()
-    test_IpDemographics()
     pass
-#   debug_re()
