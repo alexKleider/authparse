@@ -235,62 +235,6 @@ class ArgsTest(unittest.TestCase):
         self.assertEqual(args['--output'], 'output.txt')
         self.assertEqual(args['--frequency'], False)
 
-class TestFileNameCollector(unittest.TestCase):
-    """Tests/exercises: FileNameCollector
-            it's add2list_of_file_names method,
-            and it's file_names attribute.
-    """
-    def test_dir_of_logs_default(self):
-        cmd ="argparser.py -i '~/Py/Logparse/DD/Logs' -o output.txt" 
-        c_l_args = shlex.split(cmd)
-        args = docopt(authparse.__doc__,
-                        argv=c_l_args[1:],
-                        help=True,
-                        version=VERSION,
-                        options_first=False)
-        self.assertEqual(args['--input'], ['~/Py/Logparse/DD/Logs'])
-        log_file_collector = authparse.FileNameCollector()
-        for dir_or_file in args["--input"]:
-            log_file_collector.add2list_of_file_names(dir_or_file)
-        self.assertEqual(set(log_file_collector.file_names), set([
-            "/home/alex/Py/Logparse/DD/Logs/a.log",
-            "/home/alex/Py/Logparse/DD/Logs/auth.log",
-            "/home/alex/Py/Logparse/DD/Logs/auth.log.1",
-            "/home/alex/Py/Logparse/DD/Logs/auth.log.2",
-            "/home/alex/Py/Logparse/DD/Logs/auth.log.3",
-            "/home/alex/Py/Logparse/DD/Logs/auth.log.4",
-            "/home/alex/Py/Logparse/DD/Logs/fail.log",
-            "/home/alex/Py/Logparse/DD/Logs/not_l_o_g_file",
-            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog/subsub.log",
-            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog/subsub.log.1",
-            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog1/subsub1.log",
-            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog1/subsub1.log.1",
-                ]))
-    def test_dir_of_logs_true(self):
-        cmd ="argparser.py -i '~/Py/Logparse/DD/Logs' -o output.txt" 
-        c_l_args = shlex.split(cmd)
-        args = docopt(authparse.__doc__,
-                        argv=c_l_args[1:],
-                        help=True,
-                        version=VERSION,
-                        options_first=False)
-        log_file_collector = authparse.FileNameCollector(True)
-        for dir_or_file in args["--input"]:
-            log_file_collector.add2list_of_file_names(dir_or_file)
-        self.assertSequenceEqual(sorted(log_file_collector.file_names), sorted([
-            "/home/alex/Py/Logparse/DD/Logs/a.log",
-            "/home/alex/Py/Logparse/DD/Logs/auth.log",
-            "/home/alex/Py/Logparse/DD/Logs/auth.log.1",
-            "/home/alex/Py/Logparse/DD/Logs/auth.log.2",
-            "/home/alex/Py/Logparse/DD/Logs/auth.log.3",
-            "/home/alex/Py/Logparse/DD/Logs/auth.log.4",
-            "/home/alex/Py/Logparse/DD/Logs/fail.log",
-            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog/subsub.log",
-            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog/subsub.log.1",
-            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog1/subsub1.log",
-            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog1/subsub1.log.1",
-                ]))
-
 class data_collection(unittest.TestCase):
     def test_add2ip_info1(self):
         ip_info = authparse.IpInfo()
@@ -342,6 +286,90 @@ class data_collection(unittest.TestCase):
             master.add_data(ip, authparse.LineInfo(test_lines[key]))
         keys = set([key for key in master.data])
         self.assertEqual(keys, ip_set)
+
+class InputCollection(unittest.TestCase):
+    """Test authparse.collect_inputs"""
+    def setUp(self):
+        cmd =("argparser.py -rdki ../DD/Logs " +
+            "-w ../DD/Whites -b ../DD/Blacks")
+        c_l_args = shlex.split(cmd)
+        self.args = docopt(authparse.__doc__,
+                        argv=c_l_args[1:],
+                        help=True,
+                        version=VERSION,
+                        options_first=False)
+        self.logs_default, self.whites, self.blacks = (
+                            authparse.collect_inputs(self.args))
+        cmd =("argparser.py -rdkli ../DD/Logs " +
+            "-w ../DD/Whites -b ../DD/Blacks")
+        c_l_args = shlex.split(cmd)
+        self.args = docopt(authparse.__doc__,
+                        argv=c_l_args[1:],
+                        help=True,
+                        version=VERSION,
+                        options_first=False)
+        self.logs_only, self.whites, self.blacks = (
+                            authparse.collect_inputs(self.args))
+        pass
+    def test_args(self):
+        self.assertEqual(self.args["--input"], ["../DD/Logs"])
+        self.assertEqual(self.args["--white"], ["../DD/Whites"])
+        self.assertEqual(self.args["--black"], ["../DD/Blacks"])
+    def test_collect_blacks(self):
+        self.assertEqual(set(self.blacks),
+                        set(['/home/alex/Py/Logparse/DD/Blacks/black1',
+                            ]))
+    def test_collect_whites(self):
+        self.assertEqual(set(self.whites),
+                        set(['/home/alex/Py/Logparse/DD/Whites/white1',
+                            ]))
+    def test_collect_logs_default(self):
+        self.assertEqual(set(self.logs_default), set([
+            "/home/alex/Py/Logparse/DD/Logs/a.log",
+            "/home/alex/Py/Logparse/DD/Logs/auth.log",
+            "/home/alex/Py/Logparse/DD/Logs/auth.log.1",
+            "/home/alex/Py/Logparse/DD/Logs/auth.log.2",
+            "/home/alex/Py/Logparse/DD/Logs/auth.log.3",
+            "/home/alex/Py/Logparse/DD/Logs/auth.log.4",
+            "/home/alex/Py/Logparse/DD/Logs/fail.log",
+            "/home/alex/Py/Logparse/DD/Logs/not_l_o_g_file",
+            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog/subsub.log",
+            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog/subsub.log.1",
+            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog1/subsub1.log",
+            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog1/subsub1.log.1",
+                ]))
+    def test_collect_logs_only(self):
+        self.assertSequenceEqual(set(self.logs_only), set([
+            "/home/alex/Py/Logparse/DD/Logs/a.log",
+            "/home/alex/Py/Logparse/DD/Logs/auth.log",
+            "/home/alex/Py/Logparse/DD/Logs/auth.log.1",
+            "/home/alex/Py/Logparse/DD/Logs/auth.log.2",
+            "/home/alex/Py/Logparse/DD/Logs/auth.log.3",
+            "/home/alex/Py/Logparse/DD/Logs/auth.log.4",
+            "/home/alex/Py/Logparse/DD/Logs/fail.log",
+            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog/subsub.log",
+            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog/subsub.log.1",
+            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog1/subsub1.log",
+            "/home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog1/subsub1.log.1",
+                ]))
+
+class MoveInfoSources2Master(unittest.TestCase):
+    def setUp(self):
+        cmd = "argparser.py -rdki ../DD/Sources "
+        c_l_args = shlex.split(cmd)
+        self.args = docopt(authparse.__doc__,
+                        argv=c_l_args[1:],
+                        help=True,
+                        version=VERSION,
+                        options_first=False)
+        self.logs_default, _whites, _blacks = (
+                            authparse.collect_inputs(self.args))
+    def testMove2Master(self):
+        ip_dict = authparse.IpDict()
+        authparse.move_info_sources2master(self.logs_default, ip_dict)
+        self.assertEqual(True, True)
+        print(ip_dict.show)
+
 
 # main function
 #

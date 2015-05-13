@@ -33,7 +33,7 @@ auth.log file(s) can also be reported.
 usage:
   logparser3.py --help
   logparser3.py --version
-  logparser3.py  [-qkfd]
+  logparser3.py  [-qkfdl]
                 [-r | -rr ]
                 [--white <wfile>...]
                 [--black <bfile>...]
@@ -63,6 +63,9 @@ Options:
                       beneath that directory are considered as though
                       separately specified.
   -o --output=<ofile>  Specify output file, otherwise std out is used.
+  -l --logsonly  Set this flag if only those input files containing the
+                 string designated by the constant LOG are to be
+                 included.
   -f --frequency   Sort output by frequency of appearance of IPs
                    (Default is by IP.)
 
@@ -97,6 +100,7 @@ VERSION = "v0.0.0"
 # other constants
 DummyIP = '0.0.0.0'
 LOG = "log"  # Used by FileNameCollector class.
+             # Reference to it is made in __doc__.
 # To retrieve (ipv4) IP addresses from a line:
 _IP_EXP = \
 r"""
@@ -197,6 +201,9 @@ class FileNameCollector(object):
             return False
         else:
             return True
+    @property
+    def get_file_names(self):
+        return self.file_names
     def add2list_of_file_names(self, f_or_dir_name):
         f_or_dir_full_name = os.path.abspath(
                             os.path.expanduser(
@@ -251,9 +258,9 @@ class LineInfo(object):
 class IpInfo(object):
     """An instance of this type is used to collect information about
     each IP address that appears in the log (/var/log/authlog) files.
-    Instances are kept in a dict keyed by the IP address and 
-    consist of a dict keyed by line_type.
-    Note: the ip address itself is not part of the instance.
+    Instances are kept in a dict keyed by the IP address  BUT
+    don't themselves include the IP address
+    They consist of a dict keyed by line_type.
     For line_type(s) with a string as key, the value is a list.
     For those with a key of None, the value is an integer counter.
     """
@@ -269,11 +276,17 @@ class IpInfo(object):
         else:
             entry = self.data.setdefault(line_info.line_type, 0)
             self.data[line_info.line_type] += 1
+    def show(self, args):
+        sorted_keys = sorted(self.data.keys())
+        ret = []
+        for k in sorted_keys:
+            pass  # Need lots more code here.
+            return '\n'.join(ret)
 
 class IpDict():
     """An instance is used to maintain all information gleaned from
-    the log files, and is typically a value indexed by IP address
-    within an IpInfo instance.
+    the log files. It is implemented as a dictionary keyed by IP
+    with values consisting of IpInfo instances.
     """
     def __init__(self):
         self.data = {}
@@ -283,6 +296,42 @@ class IpDict():
         """
         __0 = self.data.setdefault(ip_address, IpInfo())
         self.data[ip_address].add_entry(ip_info)
+    @property
+    def sorted_ips(self):
+        return sorted(self.data.keys(), key=sortable_ip) 
+    @property
+    def ip_frequencies(self):
+        frequencies = {}
+        for ip in self.data.keys():
+            frequency = 0
+            for ip_info in self.data[ip]:  # Instance of IpInfo
+                for k in ip_info(keys):
+                    if k:  # key is a line type
+                        frequency += len(self.data[ip][k])
+                    else:  # the None key
+                        frequency += self.data[ip][k]
+            frequencies[ip] = frequency
+        return frequencies
+    @property
+    def frequency_sorted_ips(self):
+        ip_f_dict = self.ip_frequencies
+        def val(k):
+            return ip_f_dict[k]
+        return sorted(self.data.keys(), key=val)
+    def show(self, args):
+        """Relevant args:
+        --report [0..2]:
+        --demographics:
+        --frequency:
+        """
+        ret = []
+        if args['--frequency']:
+            sorted_ips = self.frequency_sorted_ips
+        else:
+            sorted_ips = self.sorted_ips
+        for k in sorted_keys:
+            pass  # Need more code here.
+        return '\n'.join(ret)
 
 class IpDemographics(object):
     """Instances discover and keep demographics of an IP address
@@ -351,6 +400,25 @@ def get_ips(list_of_sources):
                     ret.append(ip)
     return ret
 
+def sortable_ip(ip):
+    """Takes am IP address of the form 50.143.75.105
+    and returns it in the form 050.143.075.105.
+    ... useful as a key function for sorting.
+    Quietly returns None if parameter is bad."""
+    parts = ip.strip().split('.')
+    if not len(parts)==4:
+        return None
+    else: 
+        return (
+        "{0[0]:0>3}.{0[1]:0>3}.{0[2]:0>3}.{0[3]:0>3}".format(parts)
+                )
+
+def sorted_ips(ip_list):
+    """Takes an iterable of IP addresses and 
+    returns the same addresses as a sorted list.
+    """
+    return sorted(ip_list, key=sortable_ip)
+
 def store_ip_info(ip, ip_info, master_ip_dict):
     """First parameter is an IP address to serve as the index into the
     third parameter.
@@ -361,36 +429,54 @@ def store_ip_info(ip, ip_info, master_ip_dict):
     entry = master_ip_dict.setdefault(ip, )
     master_ip_dict.add_data(ip, line_info)
 
-def move_info_sources2master(list_of_sources, master_ip_dict):
+def move_info_sources2master(list_of_sources,
+                            master_ip_dict,
+                            restrict2logs=False):
     """
     First parameter is an iterable of file (reg or dir) names
     (typically the list of log files to analyse) from which new
     information is gathered and added to <master_ip_dict>,
     an instance of IpDict.
     """
-    f_names = get_list_of_file_names(list_of_sources)
+    collector = FileNameCollector(restrict2logs)
+    for source in list_of_sources:
+        collector.add2list_of_file_names(source)
+    f_names = collector.get_file_names
     for f_name in f_names:
-        for line in open(f_name, 'r'):
-            ips = _findall_ips(line)
-            if ips:
-                ip = ips[0]
-                line_info = get_log_info(line)  # LineInfo instance.
-            else:
-                ip = NON_IP
-                line_info = LineInfo(None)
+        with open(f_name, 'r') as f:
+            for line in f:
+                ips = _findall_ips(line)
+                if ips:
+                    ip = ips[0]
+                    line_info = get_log_info(line)  # LineInfo instance.
+                else:
+                    ip = DummyIP
+                    line_info = LineInfo(None)
+                master_ip_dict.add_data(ip, line_info)
+
+def collect_inputs(args):
+    """Returns a three tuple of lists:
+    The log files, the white files, the black listed files.
+    These are selected from the command line arguments.
+    """
+    logs_collector = FileNameCollector(args['--logsonly'])
+    for fname in args["--input"]:
+        logs_collector.add2list_of_file_names(fname)
+    logs = logs_collector.get_file_names
+    white_collector = FileNameCollector()
+    for fname in args["--white"]:
+        white_collector.add2list_of_file_names(fname)
+    whites = white_collector.get_file_names
+    black_collector = FileNameCollector()
+    for fname in args["--black"]:
+        black_collector.add2list_of_file_names(fname)
+    blacks = black_collector.get_file_names
+    return logs, whites, blacks
 
 # main function
 def main():
     args = _get_args()
-    white_collector = FileNameCollector()
-    for fname in args["--white"]:
-        white_collector.add2list_of_file_names(fname)
-    black_collector = FileNameCollector()
-    for fname in args["--black"]:
-        black_collector.add2list_of_file_names(fname)
-    logs_collector = FileNameCollector(True)
-    for fname in args["--in"]:
-        logs_collector.add2list_of_file_names(fname)
+    logs, whites, blacks = collect_inputs(args)
 
 if __name__ == '__main__':  # code block to run the application
     pass
