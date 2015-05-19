@@ -33,12 +33,13 @@ auth.log file(s) can also be reported.
 usage:
   logparser3.py --help
   logparser3.py --version
-  logparser3.py  [-qkfdl]
+  logparser3.py --input <ifile>... 
+                [-adfqkl] 
                 [-r | -rr ]
                 [--white <wfile>...]
                 [--black <bfile>...]
-                [--input <ifile>...]
                 [--output <ofile>]
+                [--list_all]
 
 Options:
   -h --help  Print the __doc__ string.
@@ -47,37 +48,38 @@ Options:
           0 - Addresses alone.
           1 - Addresses and number of times each one appeared.
           2 - Addresses, number of appearances, type of appearances,
-              and additional information if available.
+                and additional information if available.
+  -a --list_all  Over ride the default which is to remove from the report
+                any IP addresses that are white or black listed.
   -d --demographics  Include location/origin of IP if possible.
+  -f --frequency   Sort output by frequency of appearance of IPs
+                    (Default is by IP.)
+  -k --known  Report any known ('white' or 'black') IPs that appeared
+                in the input and may or may not have been removed from
+                the output, depending on the --list_all option.
+  -l --logsonly  Set this flag if only those input files containing the
+                string designated by the constant LOG are to be
+                included.
   -q --quiet  Supress reporting of success list, file access errors,
-              or files devoid of IPs.
-  -k --known  Report any known ('white' or 'black') IPs
-                that have been removed from output.
+                or files devoid of IPs.
   -w --white=<wfile>  Specify 0 or more files containing white listed IPs.
   -b --black=<bfile>  Specify 0 or more files containing black listed IPs.
-  -i --input=<ifile>  Specify 0 or more input files.  If none are
-                      provided, stdin is used.
-                      These are typically auth.log files but don't have to be.
-                      If a specified file is a directory, all files
-                      with names ending in the suffix '.log' 
-                      beneath that directory are considered as though
-                      separately specified.
+  -i --input=<ifile>  Specify 1 or more input files.
+                    These are typically auth.log files but don't have to be.
+                    If a specified file is a directory, all files beneath
+                    that directory are considered as though separately
+                    specified.  (See -l/--logsonly option.)
   -o --output=<ofile>  Specify output file, otherwise std out is used.
-  -l --logsonly  Set this flag if only those input files containing the
-                 string designated by the constant LOG are to be
-                 included.
-  -f --frequency   Sort output by frequency of appearance of IPs
-                   (Default is by IP.)
 
 Any known IPs can be provided in files specified as containing either
 '--black' or '--white' listed IPs.  These are also read and any IP
-addresses found will NOT be included in the output.  (See the
--k/--known option which causes this to be reported.) Typically this
-would be useful if you have a 'white' list of known IPs you would
-definitely NOT want to block and/or if you had a 'black' list of already
-blocked IPs which you'd have no need to block again.
-Keep in mind that it should not be possible to have a black listed IP
-address appear in log files if it has in fact been blocked.
+addresses found will NOT be included in the output unless the
+-a/--list_all option is set.  (See the -k/--known option which causes
+this to be reported.) Typically this would be useful if you have a 'white'
+list of known IPs you would definitely NOT want to block and/or if you
+had a 'black' list of already blocked IPs which you'd have no need to
+block again.  Keep in mind that it should not be possible to have a black
+listed IP address appear in log files if it has in fact been blocked.
 
 If any provided file(s) don't exist or don't contain any IP's, this
 will be reported unless the -q/--quiet option is selected.
@@ -92,7 +94,10 @@ import shlex
 from pprint import pprint
 # import custom modules
 from docopt import docopt
-from ipwhois import IPWhois
+import ipwhois
+# Alternatively, could use http://freegeoip.net
+# and a google maps API is also available:
+# https://github.com/googlemaps/
 
 # metadata such as version number
 VERSION = "v0.0.0"
@@ -208,6 +213,7 @@ class FileNameCollector(object):
         f_or_dir_full_name = os.path.abspath(
                             os.path.expanduser(
                                 f_or_dir_name))
+#       print('{} => {}'.format(f_or_dir_name, f_or_dir_full_name))
         if os.path.isfile(f_or_dir_full_name):
             if self.include(f_or_dir_name):
                 self.file_names.append(f_or_dir_full_name)
@@ -219,6 +225,7 @@ class FileNameCollector(object):
         else:
             print(
             "File '{}' doesn't exist.".format(f_or_dir_full_name))
+            pass
 
 # Overview:  (of the next three Class declarations)
 #  The top level data structure is one instance of IpDict:
@@ -238,7 +245,6 @@ class LineInfo(object):
     """
     def __init__(self, line):
         """Accepts a line of text and returns an instance.
-        Provides support for get_log_info(line)
         If <line> is None, returns an 'unrecognized' instance.
         """
         self.line_type = 'unrecognized'
@@ -276,12 +282,44 @@ class IpInfo(object):
         else:
             entry = self.data.setdefault(line_info.line_type, 0)
             self.data[line_info.line_type] += 1
-    def show(self, args):
-        sorted_keys = sorted(self.data.keys())
+    def frequency(self):
+        ret = 0
+        for line_type in self.data.keys():
+            val = self.data[line_type]
+            if isinstance(val, int):
+                ret += val
+            else:
+                ret += len(val)
+        return ret
+    def show(self, args, ip='IP unspecified'):
         ret = []
-        for k in sorted_keys:
-            pass  # Need lots more code here.
-            return '\n'.join(ret)
+        if args['--demographics']:
+            demographics = GeoIP(ip)
+            ret.append(demographics.show())
+        else:
+            ret.append("{}".format(ip))
+        if args['--report']:
+            ret.append("  Appearances: {}.".format(self.frequency()))
+            if args['--report'] > 1:
+                keys = self.data.keys()
+                sortable_keys = (
+                        [k for k in keys if k != None])
+                sorted_keys = sorted(sortable_keys)
+                if None in keys:
+                    ret.append("    Unspecified: {}."
+                                .format(self.data[None])) # an int
+                for line_type in sorted_keys:
+                    if isinstance(self.data[line_type], int):
+                        ret.append("    {}: {}."
+                            .format(line_type,
+                                    self.data[line_type]))
+                    else:
+                        ret.append("    {}: {}. =>{}"
+                            .format(line_type,
+                                    len(self.data[line_type]),
+                                    self.data[line_type]))
+                pass
+        return '\n'.join(ret)
 
 class IpDict():
     """An instance is used to maintain all information gleaned from
@@ -296,6 +334,30 @@ class IpDict():
         """
         __0 = self.data.setdefault(ip_address, IpInfo())
         self.data[ip_address].add_entry(ip_info)
+    def populate_from_source_files(self, list_of_source_files, args):
+        """
+        <list_of_source_files> is an iterable of file names
+        from which new information is gathered and added to 
+        self.data.          (See collect_inputs(args).)
+        Returned is a list, possibly empty, of the
+        names of files that did NOT contain any IP addresses.
+        """
+        files_without_ips = []
+        for f_name in list_of_source_files:
+            no_ips_found = True
+            with open(f_name, 'r') as f:
+                for line in f:
+                    ip = get_ip(line)
+                    if ip == DummyIP:
+                        line_info = LineInfo(None)
+                    else:
+                        line_info = LineInfo(line)
+                        no_ips_found = False
+                    self.add_data(ip, line_info)
+                if no_ips_found:
+                    files_without_ips.append(f_name)
+        return files_without_ips
+
     @property
     def sorted_ips(self):
         return sorted(self.data.keys(), key=sortable_ip) 
@@ -304,12 +366,12 @@ class IpDict():
         frequencies = {}
         for ip in self.data.keys():
             frequency = 0
-            for ip_info in self.data[ip]:  # Instance of IpInfo
-                for k in ip_info(keys):
-                    if k:  # key is a line type
-                        frequency += len(self.data[ip][k])
-                    else:  # the None key
-                        frequency += self.data[ip][k]
+            ip_info = self.data[ip]  # Instance of IpInfo
+            for line_type in ip_info.data.keys():
+                if isinstance(ip_info.data[line_type], int):
+                    frequency += ip_info.data[line_type]
+                else:  # the None key
+                    frequency += len(ip_info.data[line_type])
             frequencies[ip] = frequency
         return frequencies
     @property
@@ -317,7 +379,8 @@ class IpDict():
         ip_f_dict = self.ip_frequencies
         def val(k):
             return ip_f_dict[k]
-        return sorted(self.data.keys(), key=val)
+        low2high = sorted(self.data.keys(), key=val)
+        return reversed(low2high)
     def show(self, args):
         """Relevant args:
         --report [0..2]:
@@ -329,15 +392,22 @@ class IpDict():
             sorted_ips = self.frequency_sorted_ips
         else:
             sorted_ips = self.sorted_ips
-        for k in sorted_keys:
-            pass  # Need more code here.
+        for ip in sorted_ips:
+            ip_info = self.data[ip]
+            ret.append(ip_info.show(args, ip))
         return '\n'.join(ret)
 
-class IpDemographics(object):
+class GeoIP(object):
     """Instances discover and keep demographics of an IP address
     provided to the __init__ as a dotted quad."""
     def __init__(self, ip_addr, NO_INFO="unavailable"):
-        obj = IPWhois(ip_addr)
+        try:
+            obj = ipwhois.IPWhois(ip_addr)
+        except ipwhois.ipwhois.IPDefinedError as message:
+            self.data = dict(ip= ip_addr, address= '',
+                city= '', country= '',
+                description= message, state= '')
+            return
         all_ip_info = obj.lookup()
         nets = all_ip_info['nets'][0]
         self.data = dict(
@@ -349,12 +419,15 @@ class IpDemographics(object):
                 state = nets.setdefault('state', NO_INFO),
                 )
         for k in self.data:  # Remove line breaks from within fields.
-            ss = self.data[k].split('\n')
-            s = ', '.join(ss)
-            self.data[k] = s
+            if self.data[k]:
+                ss = self.data[k].split('\n')
+                s = ', '.join(ss)
+                self.data[k] = s
     def __repr__(self):
         return """IP {ip}: {description}
     {address}, {city}, {state}, {country}""".format(**self.data)
+    def show(self):
+        return self.__repr__()
     @property
     def get_data(self):
         return self.data
@@ -377,27 +450,28 @@ def get_ip(line):
     else:
         return DummyIP
 
-def get_log_info(line):
-    """<line> is assumed to be a log file line.
-    Returns an instance of LineInfo class. Simply returns LineInfo(line)
+def get_ips(list_of_sources, list_of_files_without_ips=[]):
     """
-    return LineInfo(line)
-
-def get_ips(list_of_sources):
-    """
-    The parameter is an iterable of file (regular or directory) names.
-    Returned is the set of all IP addresses contained in the files,
-    both those listed and those within directories listed.
-    The parameter would typically be the list of white or black files.
+    The parameter is an iterable of regular file names.
+    Returned is the set of all IP addresses contained in the files.
+    The parameter would typically be the list of white or black files
+    returned by the second and third items in the three tuple returned
+    by collect_inputs(args).
+    An optional parameter can be used to collect names of those source
+    files that do not contain any recognizable IP addresses.
     """
     ret = set()
-    f_names = get_list_of_file_names(list_of_sources)
-    for f_name in f_names:
-        for line in open(f_name, 'r'):
-            ips = _findall_ips(line)
-            if ips:
-                for ip in ips:
-                    ret.append(ip)
+    for f_name in list_of_sources:
+        no_ips_found = True
+        with open(f_name, 'r') as f:
+            for line in f:
+                ips = _findall_ips(line)
+                if ips:
+                    no_ips_found = False
+                    for ip in ips:
+                        ret.add(ip)
+        if no_ips_found:
+            list_of_files_without_ips.append(f_name)
     return ret
 
 def sortable_ip(ip):
@@ -419,64 +493,69 @@ def sorted_ips(ip_list):
     """
     return sorted(ip_list, key=sortable_ip)
 
-def store_ip_info(ip, ip_info, master_ip_dict):
-    """First parameter is an IP address to serve as the index into the
-    third parameter.
-    Second parameter is an instance of IpInfo which 
-    is stored in <master_ip_dict> (an instance of IpDict) indexed by <ip>.
-    DON'T NEED THIS- CAN USE IpDict method add_data.
-    """
-    entry = master_ip_dict.setdefault(ip, )
-    master_ip_dict.add_data(ip, line_info)
-
-def move_info_sources2master(list_of_sources,
-                            master_ip_dict,
-                            restrict2logs=False):
-    """
-    First parameter is an iterable of file (reg or dir) names
-    (typically the list of log files to analyse) from which new
-    information is gathered and added to <master_ip_dict>,
-    an instance of IpDict.
-    """
-    collector = FileNameCollector(restrict2logs)
-    for source in list_of_sources:
-        collector.add2list_of_file_names(source)
-    f_names = collector.get_file_names
-    for f_name in f_names:
-        with open(f_name, 'r') as f:
-            for line in f:
-                ips = _findall_ips(line)
-                if ips:
-                    ip = ips[0]
-                    line_info = get_log_info(line)  # LineInfo instance.
-                else:
-                    ip = DummyIP
-                    line_info = LineInfo(None)
-                master_ip_dict.add_data(ip, line_info)
-
 def collect_inputs(args):
     """Returns a three tuple of lists:
-    The log files, the white files, the black listed files.
+    The log files, files containing white listed IPs,
+    and files containing black listed IPs.
     These are selected from the command line arguments.
     """
     logs_collector = FileNameCollector(args['--logsonly'])
     for fname in args["--input"]:
         logs_collector.add2list_of_file_names(fname)
-    logs = logs_collector.get_file_names
+
     white_collector = FileNameCollector()
     for fname in args["--white"]:
         white_collector.add2list_of_file_names(fname)
-    whites = white_collector.get_file_names
+
     black_collector = FileNameCollector()
     for fname in args["--black"]:
         black_collector.add2list_of_file_names(fname)
-    blacks = black_collector.get_file_names
-    return logs, whites, blacks
+
+    return (logs_collector.get_file_names,
+            white_collector.get_file_names,
+            black_collector.get_file_names,
+            )
+
+def show_file_list(file_list, indentation = 1):
+    indented_list = [('\t' * indentation) + f for f in file_list]
+    return '\n'.join(indented_list)
+
+def subreport(header, iterable):
+    """Returns a string consisting of the header at the top
+    followed by a listing of iterable, one per line."""
+    if iterable:
+        ret = [header]
+        for item in iterable:
+            ret.append(item)
+        return '\n'.join(ret)
+    else:
+        return ''
 
 # main function
 def main():
+    report = ["<authparse> REPORT", ]
+    white_files_without_ips = []
+    black_files_without_ips = []
+    log_files_without_ips = []
     args = _get_args()
     logs, whites, blacks = collect_inputs(args)
+    white_ips = get_ips(whites, white_files_without_ips)
+    black_ips = get_ips(blacks, black_files_without_ips)
+    masterIP_dict = IpDict()
+    log_files_without_ips.extend(
+            masterIP_dict.populate_from_source_files(logs, args))
+    if not args["--quiet"]:
+        if white_files_without_ips:
+            pass
+        if black_files_without_ips:
+            pass
+        if log_files_without_ips:
+            pass
+        pass
+    print(wb_files_without_ips)
+    print(log_files_without_ips)
+
 
 if __name__ == '__main__':  # code block to run the application
+    main()
     pass
