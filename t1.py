@@ -419,7 +419,7 @@ class CollectInputs(unittest.TestCase):
     def testIpDict_populate_from_sources(self):
         ip_dict = authparse.IpDict()
         no_ip_files = ip_dict.populate_from_source_files(
-                                    self.logs_default, self.args)
+                                    self.logs_default)
         self.assertEqual(set(no_ip_files),
                         set(self.logs_without_ips))
         if self.args["--output"]:
@@ -481,7 +481,7 @@ class Reports(unittest.TestCase):
         masterIP_dict = authparse.IpDict()
         log_files_without_ips = (
                         masterIP_dict.populate_from_source_files(
-                                        self.logs_default, self.args))
+                                        self.logs_default))
         if not self.args["--quiet"]:
             self.name_list_tuples = (
                     ('White:', white_files_without_ips),

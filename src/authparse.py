@@ -334,7 +334,7 @@ class IpDict():
         """
         __0 = self.data.setdefault(ip_address, IpInfo())
         self.data[ip_address].add_entry(ip_info)
-    def populate_from_source_files(self, list_of_source_files, args):
+    def populate_from_source_files(self, list_of_source_files):
         """
         <list_of_source_files> is an iterable of file names
         from which new information is gathered and added to 
@@ -559,7 +559,7 @@ def main():
     black_ips = get_ips(blacks, black_files_without_ips)
     masterIP_dict = IpDict()
     log_files_without_ips = (
-            masterIP_dict.populate_from_source_files(logs, args))
+            masterIP_dict.populate_from_source_files(logs))
     if not args["--quiet"]:
         name_list_tuples = (
                 ('White:', white_files_without_ips),
