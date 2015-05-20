@@ -71,6 +71,7 @@ Options:
                     specified.  (See -l/--logsonly option.)
   -o --output=<ofile>  Specify output file, otherwise std out is used.
 
+Additional Notes:
 Any known IPs can be provided in files specified as containing either
 '--black' or '--white' listed IPs.  These are also read and any IP
 addresses found will NOT be included in the output unless the
@@ -520,15 +521,15 @@ def show_file_list(file_list, indentation = 0):
     indented_list = [(' ' * indentation) + f for f in file_list]
     return '\n'.join(indented_list)
 
-def subreport(header, iterable, indentation = (0, 4)):
+def subreport(header, iterable, indentations = (0, 4)):
     """Returns a string consisting of the header at the top
     followed by a listing of iterable, one per line.
     The listing is indented by the number of spaces specified.
     If iterable is empty, None is returned"""
     if iterable:
-        ret = [''.join(((' ' * indentation[0]), header, ))]
+        ret = [''.join(((' ' * indentations[0]), header, ))]
         for item in iterable:
-            item = ''.join(((' ' * indentation[1]), item))
+            item = ''.join(((' ' * indentations[1]), item))
             ret.append(item)
         return '\n'.join(ret)
     else:
@@ -561,14 +562,15 @@ def main():
     log_files_without_ips = (
             masterIP_dict.populate_from_source_files(logs))
     if not args["--quiet"]:
-        name_list_tuples = (
+        subreport = get_no_ips_report(
                 ('White:', white_files_without_ips),
                 ('Black:', black_files_without_ips),
                 ('Logs:', log_files_without_ips),
                 )
-        subreport = get_no_ips_report(name_list_tuples)
         if subreport:
             report.append(subreport)
+    if not args['--list_all']:
+        pass
     print('\n'.join(report))
 
 
