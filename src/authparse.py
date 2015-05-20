@@ -516,44 +516,60 @@ def collect_inputs(args):
             black_collector.get_file_names,
             )
 
-def show_file_list(file_list, indentation = 1):
-    indented_list = [('\t' * indentation) + f for f in file_list]
+def show_file_list(file_list, indentation = 0):
+    indented_list = [(' ' * indentation) + f for f in file_list]
     return '\n'.join(indented_list)
 
-def subreport(header, iterable):
+def subreport(header, iterable, indentation = (0, 4)):
     """Returns a string consisting of the header at the top
-    followed by a listing of iterable, one per line."""
+    followed by a listing of iterable, one per line.
+    The listing is indented by the number of spaces specified.
+    If iterable is empty, None is returned"""
     if iterable:
-        ret = [header]
+        ret = [''.join(((' ' * indentation[0]), header, ))]
         for item in iterable:
+            item = ''.join(((' ' * indentation[1]), item))
             ret.append(item)
         return '\n'.join(ret)
     else:
-        return ''
+        return None
+
+def get_no_ips_report(iterable_of_name_list_tuples):
+    """Returns a report in the form of a string,
+    returns None if there is nothing to report."""
+    subreports = []
+    for header, file_names in iterable_of_name_list_tuples:
+        subreports.append(subreport(header, file_names, (2, 4)))
+    if subreports:
+        sub_report = '\n'.join(('Files with no IP addresses:',
+          '\n'.join([_report for _report in subreports if _report])))
+        return sub_report
+    else:
+        return None
+
 
 # main function
 def main():
     report = ["<authparse> REPORT", ]
     white_files_without_ips = []
     black_files_without_ips = []
-    log_files_without_ips = []
     args = _get_args()
     logs, whites, blacks = collect_inputs(args)
     white_ips = get_ips(whites, white_files_without_ips)
     black_ips = get_ips(blacks, black_files_without_ips)
     masterIP_dict = IpDict()
-    log_files_without_ips.extend(
+    log_files_without_ips = (
             masterIP_dict.populate_from_source_files(logs, args))
     if not args["--quiet"]:
-        if white_files_without_ips:
-            pass
-        if black_files_without_ips:
-            pass
-        if log_files_without_ips:
-            pass
-        pass
-    print(wb_files_without_ips)
-    print(log_files_without_ips)
+        name_list_tuples = (
+                ('White:', white_files_without_ips),
+                ('Black:', black_files_without_ips),
+                ('Logs:', log_files_without_ips),
+                )
+        subreport = get_no_ips_report(name_list_tuples)
+        if subreport:
+            report.append(subreport)
+    print('\n'.join(report))
 
 
 if __name__ == '__main__':  # code block to run the application
