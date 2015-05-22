@@ -74,8 +74,8 @@ Options:
 Additional Notes:
 Any known IPs can be provided in files specified as containing either
 '--black' or '--white' listed IPs.  These are also read and any IP
-addresses found will NOT be included in the output unless the
--a/--list_all option is set.  (See the -k/--known option which causes
+addresses found will by default (unless the -a/--list_all option is set)
+NOT be included in the output.  (See the -k/--known option which causes
 this to be reported.) Typically this would be useful if you have a 'white'
 list of known IPs you would definitely NOT want to block and/or if you
 had a 'black' list of already blocked IPs which you'd have no need to
@@ -375,12 +375,12 @@ class IpDict():
                     frequency += len(ip_info.data[line_type])
             frequencies[ip] = frequency
         return frequencies
-    @property
-    def frequency_sorted_ips(self):
+    def frequency_sorted_ips(self, exclude=set()):
+        keys = set(self.data.keys()) - exclude
         ip_f_dict = self.ip_frequencies
         def val(k):
             return ip_f_dict[k]
-        low2high = sorted(self.data.keys(), key=val)
+        low2high = sorted(keys, key=val)
         return reversed(low2high)
     def show(self, args):
         """Relevant args:
@@ -390,7 +390,7 @@ class IpDict():
         """
         ret = []
         if args['--frequency']:
-            sorted_ips = self.frequency_sorted_ips
+            sorted_ips = self.frequency_sorted_ips()
         else:
             sorted_ips = self.sorted_ips
         for ip in sorted_ips:
@@ -530,7 +530,7 @@ def sortable_ip(ip):
         "{0[0]:0>3}.{0[1]:0>3}.{0[2]:0>3}.{0[3]:0>3}".format(parts)
                 )
 
-def sorted_ips(ip_list):
+def ips_sorted(ip_list):
     """Takes an iterable of IP addresses and 
     returns the same addresses as a sorted list.
     """
@@ -567,18 +567,24 @@ def main():
     black_files_without_ips = []
     args = _get_args()
     logs, whites, blacks = collect_inputs(args)
-    white_ips = get_ips(whites, white_files_without_ips)
-    black_ips = get_ips(blacks, black_files_without_ips)
+    white_ips = ips_sorted(get_ips(whites, white_files_without_ips))
+    black_ips = ips_sorted(get_ips(blacks, black_files_without_ips))
     masterIP_dict = IpDict()
     log_files_without_ips = (
             masterIP_dict.populate_from_source_files(logs))
     if args['--frequency']:
-        sorted_ips = masterIP_dict.frequency_sorted_ips
+        sorted_ips = masterIP_dict.frequency_sorted_ips()
     else:
         sorted_ips = masterIP_dict.sorted_ips
     # Parameter collection is now complete providing us with:
     # args, white_&black_ips and  masterIP_dict, as well as
     # ..._without_ips lists of file names and sorted_ips.
+    whites_found = ips_sorted(list(set(white_ips) & set(sorted_ips)))
+    blacks_found = ips_sorted(list(set(black_ips) & set(sorted_ips)))
+    if not args['--list_all']:
+        sorted_ips = masterIP_dict.frequency_sorted_ips(
+                                    exclude=set(whites_found))
+        pass
     if not args["--quiet"]:
         report.add2report('Files with no IP addresses:', (
                 ('White:', white_files_without_ips),
