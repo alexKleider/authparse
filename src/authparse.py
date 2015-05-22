@@ -433,6 +433,48 @@ class GeoIP(object):
     def get_data(self):
         return self.data
 
+class Report(object):
+    """Maintains a report in the form of a list of strings
+    which when shown, are joined with newLines.
+    """
+    def __init__(self, title = ''):
+        self.report = []
+        if title:
+            self.report.append(title)
+    def __repr__(self):
+        return '\n'.join(self.report)
+    def __str__(self):
+        return '\n'.join(self.report)
+    @property
+    def show(self):
+        return '\n'.join(self.report)
+    def add(self, string_object):
+        self.report.append(string_object)
+    def add2report(self, header, iterable_of_name_list_tuples,
+                                indentations= (0,2,4)):
+        """Appends to the report,
+        does nothing if none of the lists have content.
+        <indentations> is a three tuple:
+            0: for the header
+            1: for the names (sub headers)
+            2: for the list items."""
+#       indented_header = ''.join(((' ' * indentations[0]), header))
+#       print('\n', "indented_header is '{}'."
+#                                   .format(indented_header), '\n')
+        subreports = []
+        for subheader, file_names in iterable_of_name_list_tuples:
+            if file_names:
+                ret = [''.join(((' ' * indentations[1]), subheader,))]
+                for item in file_names:
+                    indented_item = ''.join(
+                                    (' ' * indentations[2], item))
+                    ret.append(indented_item)
+                subreports.append('\n'.join(ret))
+        if subreports:
+            sub_report = '\n'.join(( (indentations[0] * ' ') + header,
+                                    '\n'.join(subreports)))
+            self.add(sub_report)
+
 def get_list_of_ips(line):
     """Returns a list (possibly empty) of all ipv4 addresses found in
     the line. Simply calls _findall_ips(line).
@@ -517,41 +559,10 @@ def collect_inputs(args):
             black_collector.get_file_names,
             )
 
-def show_file_list(file_list, indentation = 0):
-    indented_list = [(' ' * indentation) + f for f in file_list]
-    return '\n'.join(indented_list)
-
-def subreport(header, iterable, indentations = (0, 4)):
-    """Returns a string consisting of the header at the top
-    followed by a listing of iterable, one per line.
-    The listing is indented by the number of spaces specified.
-    If iterable is empty, None is returned"""
-    if iterable:
-        ret = [''.join(((' ' * indentations[0]), header, ))]
-        for item in iterable:
-            item = ''.join(((' ' * indentations[1]), item))
-            ret.append(item)
-        return '\n'.join(ret)
-    else:
-        return None
-
-def get_no_ips_report(iterable_of_name_list_tuples):
-    """Returns a report in the form of a string,
-    returns None if there is nothing to report."""
-    subreports = []
-    for header, file_names in iterable_of_name_list_tuples:
-        subreports.append(subreport(header, file_names, (2, 4)))
-    if subreports:
-        sub_report = '\n'.join(('Files with no IP addresses:',
-          '\n'.join([_report for _report in subreports if _report])))
-        return sub_report
-    else:
-        return None
-
 
 # main function
 def main():
-    report = ["<authparse> REPORT", ]
+    report = Report("<authparse> REPORT")
     white_files_without_ips = []
     black_files_without_ips = []
     args = _get_args()
@@ -561,17 +572,22 @@ def main():
     masterIP_dict = IpDict()
     log_files_without_ips = (
             masterIP_dict.populate_from_source_files(logs))
+    if args['--frequency']:
+        sorted_ips = masterIP_dict.frequency_sorted_ips
+    else:
+        sorted_ips = masterIP_dict.sorted_ips
+    # Parameter collection is now complete providing us with:
+    # args, white_&black_ips and  masterIP_dict, as well as
+    # ..._without_ips lists of file names and sorted_ips.
     if not args["--quiet"]:
-        subreport = get_no_ips_report(
+        report.add2report('Files with no IP addresses:', (
                 ('White:', white_files_without_ips),
                 ('Black:', black_files_without_ips),
                 ('Logs:', log_files_without_ips),
-                )
-        if subreport:
-            report.append(subreport)
+                ))
     if not args['--list_all']:
         pass
-    print('\n'.join(report))
+    print(report)
 
 
 if __name__ == '__main__':  # code block to run the application

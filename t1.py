@@ -428,41 +428,6 @@ class CollectInputs(unittest.TestCase):
         else:
             print(ip_dict.show(self.args))
 
-class ShowFileList(unittest.TestCase):
-    def test_empty_list(self):
-        self.assertEqual(authparse.show_file_list([]), '')
-
-    def test_longer_list(self):
-        l = ['file1', 'file2', 'file3', ]
-        self.assertEqual(authparse.show_file_list(l),
-                        "file1\nfile2\nfile3")
-
-    def test_different_indentation(self):
-        l = ['file1', 'file2', 'file3', ]
-        self.assertEqual(authparse.show_file_list(l, 2),
-                        "  file1\n  file2\n  file3")
-
-class SubReport(unittest.TestCase):
-    def testEmpty(self):
-        report = authparse.subreport('Some Header',
-                    [])
-        self.assertEqual(report, None)
-    def test_with_content(self):
-        header = 'Some Header'
-        report = authparse.subreport(header,
-                    ['first', 'second', 'third', 'forth',])
-        self.assertEqual(report,
-            '{}\n    first\n    second\n    third\n    forth'
-                                    .format(header))
-    def test_with_different_indentation(self):
-        header = 'Some Header'
-        report = authparse.subreport(header,
-                    ['first', 'second', 'third', 'forth',],
-                    (2, 4))
-        self.assertEqual(report,
-            '  {}\n    first\n    second\n    third\n    forth'
-                                    .format(header))
-
 class Reports(unittest.TestCase):
     def setUp(self):
         cmd = CMD
@@ -488,10 +453,14 @@ class Reports(unittest.TestCase):
                     ('Black:', black_files_without_ips),
                     ('Logs:', log_files_without_ips),
                     )
+            self.report = authparse.Report("Main Report Header")
     def test_noIPs_report(self):
-        self.assertEqual(
-                    authparse.get_no_ips_report(self.name_list_tuples),
-"""Files with no IP addresses:
+        self.report.add2report(
+                        "Files with no IP addresses:",
+                        self.name_list_tuples),
+        expected_report = (
+"""Main Report Header
+Files with no IP addresses:
   White:
     /home/alex/Py/Logparse/DD/Whites0/noWhiteIPs
   Black:
@@ -501,6 +470,7 @@ class Reports(unittest.TestCase):
     /home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog/subsub.log
     /home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog1/subsub.log"""
         )
+        self.assertEqual(self.report.show, expected_report)
 
 
 # main function
