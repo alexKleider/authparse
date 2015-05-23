@@ -49,14 +49,15 @@ Options:
           1 - Addresses and number of times each one appeared.
           2 - Addresses, number of appearances, type of appearances,
                 and additional information if available.
-  -a --list_all  Over ride the default which is to remove from the report
-                any IP addresses that are white or black listed.
+  -a --list_all   Over ride the default which is to remove from the
+                report any IP addresses that are white or black listed.
   -d --demographics  Include location/origin of IP if possible.
   -f --frequency   Sort output by frequency of appearance of IPs
                     (Default is by IP.)
-  -k --known  Report any known ('white' or 'black') IPs that appeared
-                in the input and may or may not have been removed from
-                the output, depending on the --list_all option.
+  -k --known  Report any known ('white', 'black' or public) IPs that
+                appeared in the input/log files and may or may not have
+                been removed from the output, depending on the
+                "--list_all" option.
   -l --logsonly  Set this flag if only those input files containing the
                 string designated by the constant LOG are to be
                 included.
@@ -358,10 +359,9 @@ class IpDict():
                 if no_ips_found:
                     files_without_ips.append(f_name)
         return files_without_ips
-
-    @property
-    def sorted_ips(self):
-        return sorted(self.data.keys(), key=sortable_ip) 
+    def sorted_ips(self, excluded=set()):
+        keys = set(self.data.keys()) & excluded
+        return sorted(keys, key=sortable_ip) 
     @property
     def ip_frequencies(self):
         frequencies = {}
@@ -375,12 +375,12 @@ class IpDict():
                     frequency += len(ip_info.data[line_type])
             frequencies[ip] = frequency
         return frequencies
-    @property
-    def frequency_sorted_ips(self):
+    def frequency_sorted_ips(self, excluded=set()):
+        keys = set(self.data.keys()) & excluded
         ip_f_dict = self.ip_frequencies
         def val(k):
             return ip_f_dict[k]
-        low2high = sorted(self.data.keys(), key=val)
+        low2high = sorted(keys, key=val)  # Place for a lambda?
         return reversed(low2high)
     def show(self, args):
         """Relevant args:
@@ -432,6 +432,10 @@ class GeoIP(object):
     @property
     def get_data(self):
         return self.data
+
+class IP(object):
+    def __init__(self, ip):
+        self.quad = ip.split('.')
 
 class Report(object):
     """Maintains a report in the form of a list of strings
@@ -580,6 +584,14 @@ def main():
     # Parameter collection is now complete providing us with:
     # args, white_&black_ips and  masterIP_dict, as well as
     # ..._without_ips lists of file names and sorted_ips.
+    white_set = set(white_ips) & set(masterIP_dict.data.keys())
+    black_set = set(black_ips) & set(masterIP_dict.data.keys())
+    whites_found = ips_sorted(list(set(white_ips)))
+    blacks_found = ips_sorted(list(set(black_ips)))
+    if args['--show-all']:
+        exclude_set = set()
+    else:
+        exclude_set = white_set | black_set
     if not args["--quiet"]:
         report.add2report('Files with no IP addresses:', (
                 ('White:', white_files_without_ips),
