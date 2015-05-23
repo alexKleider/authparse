@@ -390,9 +390,9 @@ class IpDict():
         """
         ret = []
         if args['--frequency']:
-            sorted_ips = self.frequency_sorted_ips
+            sorted_ips = self.frequency_sorted_ips()
         else:
-            sorted_ips = self.sorted_ips
+            sorted_ips = self.sorted_ips()
         for ip in sorted_ips:
             ip_info = self.data[ip]
             ret.append(ip_info.show(args, ip))
@@ -566,6 +566,7 @@ def collect_inputs(args):
 
 # main function
 def main():
+    print('\n\nOUTPUT BEGINS HERE')
     report = Report("<authparse> REPORT")
     white_files_without_ips = []
     black_files_without_ips = []
@@ -577,29 +578,30 @@ def main():
     masterIP_dict = IpDict()
     log_files_without_ips = (
             masterIP_dict.populate_from_source_files(logs))
-    if args['--frequency']:
-        sorted_ips = masterIP_dict.frequency_sorted_ips
-    else:
-        sorted_ips = masterIP_dict.sorted_ips
     # Parameter collection is now complete providing us with:
     # args, white_&black_ips and  masterIP_dict, as well as
-    # ..._without_ips lists of file names and sorted_ips.
+    # ..._without_ips lists of file names.
     white_set = set(white_ips) & set(masterIP_dict.data.keys())
     black_set = set(black_ips) & set(masterIP_dict.data.keys())
-    whites_found = ips_sorted(list(set(white_ips)))
-    blacks_found = ips_sorted(list(set(black_ips)))
-    if args['--show-all']:
-        exclude_set = set()
-    else:
-        exclude_set = white_set | black_set
+    whites_found_in_logs = sorted_ips(list(set(white_ips)))
+    blacks_found_in_logs = sorted_ips(list(set(black_ips)))
     if not args["--quiet"]:
         report.add2report('Files with no IP addresses:', (
                 ('White:', white_files_without_ips),
                 ('Black:', black_files_without_ips),
                 ('Logs:', log_files_without_ips),
                 ))
-    if not args['--list_all']:
-        pass
+    if args['--list_all']:
+        exclude_set = set()
+        header4known = "Recognized Addresses:"
+    else:
+        exclude_set = white_set | black_set
+        header4known = (
+            "Recognized Addresses: (removed from main output)")
+    if args["--known"]:  # Must report whites, blacks and privates
+       pass              # that were found in the input/log files.
+#   if not args['--list_all']:
+#       pass
     print(report)
 
 
