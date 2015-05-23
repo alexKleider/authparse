@@ -34,7 +34,7 @@ usage:
   logparser3.py --help
   logparser3.py --version
   logparser3.py --input <ifile>... 
-                [-adfqkl] 
+                [-dfqkl] 
                 [-r | -rr ]
                 [--white <wfile>...]
                 [--black <bfile>...]
@@ -566,6 +566,7 @@ def main():
     white_files_without_ips = []
     black_files_without_ips = []
     args = _get_args()
+    print(args)
     logs, whites, blacks = collect_inputs(args)
     white_ips = get_ips(whites, white_files_without_ips)
     black_ips = get_ips(blacks, black_files_without_ips)
