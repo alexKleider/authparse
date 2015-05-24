@@ -34,7 +34,7 @@ usage:
   logparser3.py --help
   logparser3.py --version
   logparser3.py --input <ifile>... 
-                [-adfqkl] 
+                [-dfqkl] 
                 [-r | -rr ]
                 [--white <wfile>...]
                 [--black <bfile>...]
@@ -49,14 +49,15 @@ Options:
           1 - Addresses and number of times each one appeared.
           2 - Addresses, number of appearances, type of appearances,
                 and additional information if available.
-  -a --list_all  Over ride the default which is to remove from the report
-                any IP addresses that are white or black listed.
+  -a --list_all   Over ride the default which is to remove from the
+                report any IP addresses that are white or black listed.
   -d --demographics  Include location/origin of IP if possible.
   -f --frequency   Sort output by frequency of appearance of IPs
                     (Default is by IP.)
-  -k --known  Report any known ('white' or 'black') IPs that appeared
-                in the input and may or may not have been removed from
-                the output, depending on the --list_all option.
+  -k --known  Report any known ('white', 'black' or public) IPs that
+                appeared in the input/log files and may or may not have
+                been removed from the output, depending on the
+                "--list_all" option.
   -l --logsonly  Set this flag if only those input files containing the
                 string designated by the constant LOG are to be
                 included.
@@ -358,10 +359,9 @@ class IpDict():
                 if no_ips_found:
                     files_without_ips.append(f_name)
         return files_without_ips
-
-    @property
-    def sorted_ips(self):
-        return sorted(self.data.keys(), key=sortable_ip) 
+    def sorted_ips(self, excluded=set()):
+        keys = set(self.data.keys()) & excluded
+        return sorted(keys, key=sortable_ip) 
     @property
     def ip_frequencies(self):
         frequencies = {}
@@ -380,7 +380,7 @@ class IpDict():
         ip_f_dict = self.ip_frequencies
         def val(k):
             return ip_f_dict[k]
-        low2high = sorted(keys, key=val)
+        low2high = sorted(keys, key=val)  # Place for a lambda?
         return reversed(low2high)
     def show(self, args):
         """Relevant args:
@@ -392,7 +392,7 @@ class IpDict():
         if args['--frequency']:
             sorted_ips = self.frequency_sorted_ips()
         else:
-            sorted_ips = self.sorted_ips
+            sorted_ips = self.sorted_ips()
         for ip in sorted_ips:
             ip_info = self.data[ip]
             ret.append(ip_info.show(args, ip))
@@ -432,6 +432,10 @@ class GeoIP(object):
     @property
     def get_data(self):
         return self.data
+
+class IP(object):
+    def __init__(self, ip):
+        self.quad = ip.split('.')
 
 class Report(object):
     """Maintains a report in the form of a list of strings
@@ -474,6 +478,29 @@ class Report(object):
             sub_report = '\n'.join(( (indentations[0] * ' ') + header,
                                     '\n'.join(subreports)))
             self.add(sub_report)
+
+
+class IpSet(object):
+    """Provides fuctionality to deal with sets of IP addresses."""
+    def __init__(self, iterable, keyfunc=None):
+        """Stores a set which can be created from <iterable>, filtered
+        by <keyfunc> if one is provided."""
+        self.data = set(iterable)
+        if keyfunc:
+            self.data = {item for item in iterable if keyfunc(item)}
+    def private(self, ip_address):
+        """Returns True only if ip_address is within a reserve block."""
+        l = ip_address.split('.')
+        for i in range(len(l)):
+            l[i] = int(l[i])
+        if (   (l[0] == 10)
+            or (l[:2] == [192, 168, ])
+            or ((l[0] == 172) and (l[1]>=16) and (l[1]<32))
+            ):
+            return True
+    def privates_only(self):
+        """Returns only the private IPs within its data set."""
+        return {ip for ip in self.data if self.private(ip)}
 
 def get_list_of_ips(line):
     """Returns a list (possibly empty) of all ipv4 addresses found in
@@ -562,38 +589,56 @@ def collect_inputs(args):
 
 # main function
 def main():
+    print('\n\nOUTPUT BEGINS HERE')
     report = Report("<authparse> REPORT")
     white_files_without_ips = []
     black_files_without_ips = []
     args = _get_args()
+    print(args)
     logs, whites, blacks = collect_inputs(args)
     white_ips = ips_sorted(get_ips(whites, white_files_without_ips))
     black_ips = ips_sorted(get_ips(blacks, black_files_without_ips))
     masterIP_dict = IpDict()
     log_files_without_ips = (
             masterIP_dict.populate_from_source_files(logs))
-    if args['--frequency']:
-        sorted_ips = masterIP_dict.frequency_sorted_ips()
-    else:
-        sorted_ips = masterIP_dict.sorted_ips
     # Parameter collection is now complete providing us with:
     # args, white_&black_ips and  masterIP_dict, as well as
-    # ..._without_ips lists of file names and sorted_ips.
-    whites_found = ips_sorted(list(set(white_ips) & set(sorted_ips)))
-    blacks_found = ips_sorted(list(set(black_ips) & set(sorted_ips)))
-    if not args['--list_all']:
-        sorted_ips = masterIP_dict.frequency_sorted_ips(
-                                    exclude=set(whites_found))
-        pass
+    # ..._without_ips lists of file names.
+
+    master_ip_set = set(masterIP_dict.data.keys())
+    selected_whites = set(white_ips) & set(master_ip_set)
+    selected_blacks = set(black_ips) & set(master_ip_set)
+    whites_found_in_logs = ips_sorted(list(selected_whites))
+    blacks_found_in_logs = ips_sorted(list(selected_blacks))
     if not args["--quiet"]:
         report.add2report('Files with no IP addresses:', (
                 ('White:', white_files_without_ips),
                 ('Black:', black_files_without_ips),
                 ('Logs:', log_files_without_ips),
                 ))
-    if not args['--list_all']:
-        pass
-    print(report)
+    if args['--list_all']:
+        exclude_set = set()
+        header4known = "Recognized Addresses:"
+    else:
+        exclude_set = selected_whites | selected_blacks  # | privates as well
+        header4known = (
+            "Recognized Addresses: (removed from main output)")
+    if args["--known"]: # Must report whites, blacks and privates
+                        # that were found in, and removed from,
+                        # the input/log files.
+       report.add2report(header4known, (
+                ('White:', whites_found_in_logs),
+                ('Black:', blacks_found_in_logs),
+                ('Private:', IpSet(master_ip_set).privates_only()),
+                        )              )
+
+    pass
+    # All done: just need to issue the report:
+    if args['--output']:
+        with open(args['--output'], 'w') as f:
+            f.write(report.show)
+    else:
+        print(report)
 
 
 if __name__ == '__main__':  # code block to run the application
