@@ -472,6 +472,34 @@ Files with no IP addresses:
         )
         self.assertEqual(self.report.show, expected_report)
 
+class IpSetTesting(unittest.TestCase):
+    def setUp(self):
+        self.an_ipset = {
+                '10.0.0.2',       # private
+                '76.191.204.54',  # kleider.ca
+                '173.228.54.112', # kleico.net
+                '204.14.156.167', # indi303.net
+                '89.18.173.13',   # dogpatch.eu
+                '205.210.42.135', # easydns.com
+                '109.72.87.226',  # pcextreme.com
+                }
+        self.ipset_instance = authparse.IpSet((
+                        '10.0.0.2',
+                        '76.191.204.54',
+                        '173.228.54.112',
+                        '204.14.156.167',
+                        '89.18.173.13',
+                        '205.210.42.135',
+                        '109.72.87.226',
+                        ))
+    def test_init(self):
+        self.assertEqual(self.an_ipset, 
+                    self.ipset_instance.data)
+    def test_privatize(self):
+        private_set = self.ipset_instance.privates_only()
+        self.assertEqual(private_set, {'10.0.0.2'})
+        pass
+
 
 # main function
 #

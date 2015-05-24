@@ -479,6 +479,29 @@ class Report(object):
                                     '\n'.join(subreports)))
             self.add(sub_report)
 
+
+class IpSet(object):
+    """Provides fuctionality to deal with sets of IP addresses."""
+    def __init__(self, iterable, keyfunc=None):
+        """Stores a set which can be created from <iterable>, filtered
+        by <keyfunc> if one is provided."""
+        self.data = set(iterable)
+        if keyfunc:
+            self.data = {item for item in iterable if keyfunc(item)}
+    def private(self, ip_address):
+        """Returns True only if ip_address is within a reserve block."""
+        l = ip_address.split('.')
+        for i in range(len(l)):
+            l[i] = int(l[i])
+        if (   (l[0] == 10)
+            or (l[:2] == [192, 168, ])
+            or ((l[0] == 172) and (l[1]>=16) and (l[1]<32))
+            ):
+            return True
+    def privates_only(self):
+        """Returns only the private IPs within its data set."""
+        return {ip for ip in self.data if self.private(ip)}
+
 def get_list_of_ips(line):
     """Returns a list (possibly empty) of all ipv4 addresses found in
     the line. Simply calls _findall_ips(line).
@@ -581,10 +604,15 @@ def main():
     # Parameter collection is now complete providing us with:
     # args, white_&black_ips and  masterIP_dict, as well as
     # ..._without_ips lists of file names.
-    white_set = set(white_ips) & set(masterIP_dict.data.keys())
-    black_set = set(black_ips) & set(masterIP_dict.data.keys())
-    whites_found_in_logs = sorted_ips(list(set(white_ips)))
-    blacks_found_in_logs = sorted_ips(list(set(black_ips)))
+    master_keys = masterIP_dict.data.keys()
+
+#  USE DIFFERENT IDENTIFIERS  IN THE FOLLOWING CODE  #
+
+    master_ip_set = set(master_keys)
+    selected_whites = set(white_ips) & set(master_ip_set)
+    selected_blacks = set(black_ips) & set(master_ip_set)
+    whites_found_in_logs = sorted_ips(list(selected_whites))
+    blacks_found_in_logs = sorted_ips(list(selected_blacks))
     if not args["--quiet"]:
         report.add2report('Files with no IP addresses:', (
                 ('White:', white_files_without_ips),
@@ -595,14 +623,25 @@ def main():
         exclude_set = set()
         header4known = "Recognized Addresses:"
     else:
-        exclude_set = white_set | black_set
+        exclude_set = selected_whites | selected_blacks  # | privates as well
         header4known = (
             "Recognized Addresses: (removed from main output)")
-    if args["--known"]:  # Must report whites, blacks and privates
-       pass              # that were found in the input/log files.
-#   if not args['--list_all']:
-#       pass
-    print(report)
+    if args["--known"]: # Must report whites, blacks and privates
+                        # that were found in, and removed from,
+                        # the input/log files.
+       report.add2report(header4known, (
+                ('White:', whites_found_in_logs),
+                ('Black:', blacks_found_in_logs),
+                ('Private:', IpSet(master_ip_set).privates_only),
+                        )              )
+
+    pass
+    # All done: just need to issue the report:
+    if args['--output']:
+        with open(args['--output'], 'w') as f:
+            f.write(report.show)
+    else:
+        print(report)
 
 
 if __name__ == '__main__':  # code block to run the application
