@@ -102,7 +102,7 @@ import ipwhois
 # https://github.com/googlemaps/
 
 # metadata such as version number
-VERSION = "v0.0.0"
+VERSION = "v0.0.1"
 
 # other constants
 DummyIP = '0.0.0.0'

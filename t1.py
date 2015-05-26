@@ -34,7 +34,7 @@ import support
 from src import authparse
 import collectedIPs
 # metadata such as version number
-VERSION = "v0.0.0"
+VERSION = "v0.0.1"
 # other constants
 # CMD = "argparser.py -i ../DD/Sources -b ../DD/Blacks -w ../DD/Whites -o testout"
 # CMD = "argparser.py -f -i ../DD/Sources -b ../DD/Blacks -w ../DD/Whites -o testout"
