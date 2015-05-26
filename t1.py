@@ -48,6 +48,16 @@ testout -w ../DD/Whites -w ../DD/Whites0 -b ../DD/Blacks -b ../DD/Blacks0"""
 
 # global variables
 
+
+w_ips = (                 # 0 ... 6
+        '10.0.0.2',       # private
+        '76.191.204.54',  # kleider.ca
+        '173.228.54.112', # kleico.net
+        '204.14.156.167', # indi303.net
+        '89.18.173.13',   # dogpatch.eu
+        '205.210.42.135', # easydns.com
+        '109.72.87.226',  # pcextreme.com
+        )
 # invalid_user, no_id, break_in, pub_key, closed, disconnect, listening
 test_lines = dict(
     invalid_user = (
@@ -313,8 +323,6 @@ class data_collection(unittest.TestCase):
                 1)
         self.assertEqual(set([key for key in master.data]),
                         ip_set)
-        pass
-
 
     def test_master_dict(self):
         master = authparse.IpDict()
@@ -323,6 +331,66 @@ class data_collection(unittest.TestCase):
             master.add_data(ip, authparse.LineInfo(test_lines[key]))
         keys = set([key for key in master.data])
         self.assertEqual(keys, ip_set)
+
+class IpInfoShow(unittest.TestCase):
+    """Test the show method of IpInfo class."""
+    def test_0(self): 
+        shown = ('10.0.0.1',
+                '10.0.0.1\n  Appearances: 1.',
+                "10.0.0.1\n  Appearances: 1.\n    pub_key: 1. =>['alex']",
+                )
+        for n in range(3):
+            args = {'--report': n,
+                    '--demographics': False,
+                    '--frequency': True,
+                    }
+            line_info = authparse.LineInfo(test_lines['pub_key'])
+            info = authparse.IpInfo()
+            info.add_entry(line_info)
+            s = info.show(args, '10.0.0.1')
+            self.assertEqual(s, shown[n])
+
+class IpDictShow(unittest.TestCase):
+    """Test the show method of IpDict class."""
+    def setUp(self):
+        self.args = {'--report': 1,
+                    '--demographics': False,
+                    '--frequency': False,
+                    }
+        self.master = authparse.IpDict()
+        for ip in w_ips:
+            for k in test_lines.keys():
+                line_info = authparse.LineInfo(test_lines['pub_key'])
+                self.master.add_data(ip, line_info)
+    def test_0(self):
+        master = authparse.IpDict()
+        ip = '10.0.0.1'
+        line_info = authparse.LineInfo(test_lines['pub_key'])
+        master.add_data(ip, line_info)
+        show = master.show(self.args)
+#       print('\n###\n{}\n###\n'.format(show))
+#       print('\n###\n{}\n###\n'
+#           .format(master.data[ip].show(self.args, ip)))
+        self.assertEqual(show, 
+'Remaining IP addresses (which are suspect:)\n10.0.0.1\n  Appearances: 1.')
+    def test_much(self):
+        show = self.master.show(self.args)
+        self.assertEqual(show,
+'''Remaining IP addresses (which are suspect:)
+10.0.0.2
+  Appearances: 8.
+76.191.204.54
+  Appearances: 8.
+89.18.173.13
+  Appearances: 8.
+109.72.87.226
+  Appearances: 8.
+173.228.54.112
+  Appearances: 8.
+204.14.156.167
+  Appearances: 8.
+205.210.42.135
+  Appearances: 8.''')
 
 class InputCollection(unittest.TestCase):
     """Test authparse.collect_inputs"""
@@ -454,8 +522,15 @@ class Reports(unittest.TestCase):
                     ('Logs:', log_files_without_ips),
                     )
             self.report = authparse.Report("Main Report Header")
+    def test_simple_report(self):
+        report = authparse.Report()
+        report.add_str('First addition:\n  Not much')
+        report.add_str('Second addition:\n  Little more')
+        self.assertEqual(report.show(),
+            'First addition:\n  Not much\nSecond addition:\n  Little more')
+
     def test_noIPs_report(self):
-        self.report.add2report(
+        self.report.add_subreport(
                         "Files with no IP addresses:",
                         self.name_list_tuples),
         expected_report = (
@@ -470,7 +545,7 @@ Files with no IP addresses:
     /home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog/subsub.log
     /home/alex/Py/Logparse/DD/Logs/SubLog/SubLogSubLog1/subsub.log"""
         )
-        self.assertEqual(self.report.show, expected_report)
+        self.assertEqual(self.report.show(), expected_report)
 
 class IpSetTesting(unittest.TestCase):
     def setUp(self):

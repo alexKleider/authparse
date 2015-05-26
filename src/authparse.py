@@ -360,10 +360,13 @@ class IpDict():
                     files_without_ips.append(f_name)
         return files_without_ips
     def sorted_ips(self, excluded=set()):
-        keys = set(self.data.keys()) & excluded
+        keys = set(self.data.keys()) - excluded
         return sorted(keys, key=sortable_ip) 
     @property
     def ip_frequencies(self):
+        """returns a dict keyed by IP address
+        with each value representing the number of times
+        that IP was encountered in the input (log) files."""
         frequencies = {}
         for ip in self.data.keys():
             frequency = 0
@@ -376,7 +379,11 @@ class IpDict():
             frequencies[ip] = frequency
         return frequencies
     def frequency_sorted_ips(self, excluded=set()):
-        keys = set(self.data.keys()) & excluded
+        """Provides an iterator of the IPs sorted by the frequency
+        with which they appear in the input (log) files.
+        The named parameter can be used to exclude whites
+        (or blacks -but beware if there are any blacks!)"""
+        keys = set(self.data.keys()) - excluded
         ip_f_dict = self.ip_frequencies
         def val(k):
             return ip_f_dict[k]
@@ -388,7 +395,7 @@ class IpDict():
         --demographics:
         --frequency:
         """
-        ret = []
+        ret = ["Remaining IP addresses (which are suspect:)"]
         if args['--frequency']:
             sorted_ips = self.frequency_sorted_ips()
         else:
@@ -400,7 +407,13 @@ class IpDict():
 
 class GeoIP(object):
     """Instances discover and keep demographics of an IP address
-    provided to the __init__ as a dotted quad."""
+    provided to the __init__ as a dotted quad.
+    If input is anything that raises an 
+    ipwhois.ipwhois.IPDefinedError,
+    a dict with all values, except that keyed by 'ip',
+    set to value provide as the named parameter.
+    The value keyed by 'ip' is set to the first parameter
+    provided to the __init__ method (ip_addr)."""
     def __init__(self, ip_addr, NO_INFO="unavailable"):
         try:
             obj = ipwhois.IPWhois(ip_addr)
@@ -449,12 +462,11 @@ class Report(object):
         return '\n'.join(self.report)
     def __str__(self):
         return '\n'.join(self.report)
-    @property
     def show(self):
         return '\n'.join(self.report)
-    def add(self, string_object):
+    def add_str(self, string_object):
         self.report.append(string_object)
-    def add2report(self, header, iterable_of_name_list_tuples,
+    def add_subreport(self, header, iterable_of_name_list_tuples,
                                 indentations= (0,2,4)):
         """Appends to the report,
         does nothing if none of the lists have content.
@@ -477,7 +489,7 @@ class Report(object):
         if subreports:
             sub_report = '\n'.join(( (indentations[0] * ' ') + header,
                                     '\n'.join(subreports)))
-            self.add(sub_report)
+            self.add_str(sub_report)
 
 
 class IpSet(object):
@@ -614,7 +626,7 @@ def main():
     whites_found_in_logs = sorted_ips(list(selected_whites))
     blacks_found_in_logs = sorted_ips(list(selected_blacks))
     if not args["--quiet"]:
-        report.add2report('Files with no IP addresses:', (
+        report.add_subreport('Files with no IP addresses:', (
                 ('White:', white_files_without_ips),
                 ('Black:', black_files_without_ips),
                 ('Logs:', log_files_without_ips),
@@ -629,17 +641,18 @@ def main():
     if args["--known"]: # Must report whites, blacks and privates
                         # that were found in, and removed from,
                         # the input/log files.
-       report.add2report(header4known, (
+       report.add_subreport(header4known, (
                 ('White:', whites_found_in_logs),
                 ('Black:', blacks_found_in_logs),
-                ('Private:', IpSet(master_ip_set).privates_only),
+                ('Private:', IpSet(master_ip_set).privates_only()),
                         )              )
+#   print(masterIP_dict.show(args))
+    report.add_str(masterIP_dict.show(args))
 
-    pass
     # All done: just need to issue the report:
     if args['--output']:
         with open(args['--output'], 'w') as f:
-            f.write(report.show)
+            f.write(report.show())
     else:
         print(report)
 
