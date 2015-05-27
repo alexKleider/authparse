@@ -34,7 +34,7 @@ usage:
   logparser3.py --help
   logparser3.py --version
   logparser3.py --input <ifile>... 
-                [-dfqkl] 
+                [-dfqkln] 
                 [-r | -rr ]
                 [--white <wfile>...]
                 [--black <bfile>...]
@@ -63,6 +63,13 @@ Options:
                 included.
   -q --quiet  Supress reporting of success list, file access errors,
                 or files devoid of IPs.
+  -n --include_nul_ip  The IP address 0.0.0.0 is used as a key for lines
+                          without an IP and by default is not included
+                          in the report.  Use this option to over-ride
+                          the default and have it included.  It's only
+                          use might be to provide an indication of how
+                          many lines in the input files (logs) did not
+                          contain IP addresses.
   -w --white=<wfile>  Specify 0 or more files containing white listed IPs.
   -b --black=<bfile>  Specify 0 or more files containing black listed IPs.
   -i --input=<ifile>  Specify 1 or more input files.
@@ -389,17 +396,22 @@ class IpDict():
             return ip_f_dict[k]
         low2high = sorted(keys, key=val)  # Place for a lambda?
         return reversed(low2high)
-    def show(self, args):
+    def show(self, args, excluded=set()):
         """Relevant args:
         --report [0..2]:
         --demographics:
         --frequency:
+        --list_all:
         """
-        ret = ["Remaining IP addresses (which are suspect:)"]
-        if args['--frequency']:
-            sorted_ips = self.frequency_sorted_ips()
+        if args['--list_all']:
+            ret = ["IP addresses found in input (log) files,"]
+            ret.append("(including any found in white or black lists:)")
         else:
-            sorted_ips = self.sorted_ips()
+            ret = ["Remaining IP addresses (which are suspect:)"]
+        if args['--frequency']:
+            sorted_ips = self.frequency_sorted_ips(excluded)
+        else:
+            sorted_ips = self.sorted_ips(excluded)
         for ip in sorted_ips:
             ip_info = self.data[ip]
             ret.append(ip_info.show(args, ip))
@@ -514,6 +526,17 @@ class IpSet(object):
         """Returns only the private IPs within its data set."""
         return {ip for ip in self.data if self.private(ip)}
 
+def private(ip_address):
+    """Returns True only if ip_address is within a reserve block."""
+    l = ip_address.split('.')
+    for i in range(len(l)):
+        l[i] = int(l[i])
+    if (   (l[0] == 10)
+        or (l[:2] == [192, 168, ])
+        or ((l[0] == 172) and (l[1]>=16) and (l[1]<32))
+        ):
+        return True
+
 def get_list_of_ips(line):
     """Returns a list (possibly empty) of all ipv4 addresses found in
     the line. Simply calls _findall_ips(line).
@@ -623,8 +646,10 @@ def main():
     master_ip_set = set(master_keys)
     selected_whites = set(white_ips) & set(master_ip_set)
     selected_blacks = set(black_ips) & set(master_ip_set)
+    privates = IpSet(master_ip_set).privates_only()
     whites_found_in_logs = sorted_ips(list(selected_whites))
     blacks_found_in_logs = sorted_ips(list(selected_blacks))
+    privates_found_in_logs = sorted_ips(list(privates))
     if not args["--quiet"]:
         report.add_subreport('Files with no IP addresses:', (
                 ('White:', white_files_without_ips),
@@ -635,19 +660,21 @@ def main():
         exclude_set = set()
         header4known = "Recognized Addresses:"
     else:
-        exclude_set = selected_whites | selected_blacks  # | privates as well
+        exclude_set = selected_whites | selected_blacks | privates 
         header4known = (
             "Recognized Addresses: (removed from main output)")
+    if not args['--include_nul_ip']:
+        exclude_set.add(DummyIP)
     if args["--known"]: # Must report whites, blacks and privates
                         # that were found in, and removed from,
                         # the input/log files.
        report.add_subreport(header4known, (
                 ('White:', whites_found_in_logs),
                 ('Black:', blacks_found_in_logs),
-                ('Private:', IpSet(master_ip_set).privates_only()),
+                ('Private:', privates_found_in_logs),
                         )              )
 #   print(masterIP_dict.show(args))
-    report.add_str(masterIP_dict.show(args))
+    report.add_str(masterIP_dict.show(args, excluded=exclude_set))
 
     # All done: just need to issue the report:
     if args['--output']:

@@ -343,6 +343,7 @@ class IpInfoShow(unittest.TestCase):
             args = {'--report': n,
                     '--demographics': False,
                     '--frequency': True,
+                    '--list_all': False,
                     }
             line_info = authparse.LineInfo(test_lines['pub_key'])
             info = authparse.IpInfo()
@@ -356,6 +357,7 @@ class IpDictShow(unittest.TestCase):
         self.args = {'--report': 1,
                     '--demographics': False,
                     '--frequency': False,
+                    '--list_all': False,
                     }
         self.master = authparse.IpDict()
         for ip in w_ips:
