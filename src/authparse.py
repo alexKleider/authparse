@@ -369,7 +369,7 @@ class IpDict():
                 if no_ips_found:
                     files_without_ips.append(f_name)
         return files_without_ips
-    def sorted_ips(self, excluded=set()):
+    def ips_sorted(self, excluded=set()):
         keys = set(self.data.keys()) - excluded
         return sorted(keys, key=sortable_ip) 
     @property
@@ -414,7 +414,7 @@ class IpDict():
         if args['--frequency']:
             sorted_ips = self.frequency_sorted_ips(excluded)
         else:
-            sorted_ips = self.sorted_ips(excluded)
+            sorted_ips = self.ips_sorted(excluded)
         for ip in sorted_ips:
             ip_info = self.data[ip]
             ret.append(ip_info.show(args, ip))
@@ -647,9 +647,9 @@ def main():
     selected_whites = set(white_ips) & set(master_ip_set)
     selected_blacks = set(black_ips) & set(master_ip_set)
     privates = IpSet(master_ip_set).privates_only()
-    whites_found_in_logs = sorted_ips(list(selected_whites))
-    blacks_found_in_logs = sorted_ips(list(selected_blacks))
-    privates_found_in_logs = sorted_ips(list(privates))
+    whites_found_in_logs = ips_sorted(list(selected_whites))
+    blacks_found_in_logs = ips_sorted(list(selected_blacks))
+    privates_found_in_logs = ips_sorted(list(privates))
     if not args["--quiet"]:
         report.add_subreport('Files with no IP addresses:', (
                 ('White:', white_files_without_ips),
