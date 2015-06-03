@@ -285,9 +285,11 @@ class IpInfo(object):
         """<line_info> is expected to be an instance of LineInfo.
         """
         if line_info.key_:
-            __0 = self.data.setdefault(line_info.line_type,
-                                    [])
-            self.data[line_info.line_type].append(line_info.value)
+#           __0 = self.data.setdefault(line_info.line_type,
+#                                   [])
+#           self.data[line_info.line_type].append(line_info.value)
+            self.data.setdefault(line_info.line_type,
+                                        []).append(line_info.value)
         else:
             entry = self.data.setdefault(line_info.line_type, 0)
             self.data[line_info.line_type] += 1
@@ -341,8 +343,9 @@ class IpDict():
         """Adds information from an instance of LineInfo into it's
         dictionary, creating an instance of IpInfo if needed.
         """
-        __0 = self.data.setdefault(ip_address, IpInfo())
-        self.data[ip_address].add_entry(ip_info)
+#       __0 = self.data.setdefault(ip_address, IpInfo())
+#       self.data[ip_address].add_entry(ip_info)
+        self.data.setdefault(ip_address, IpInfo()).add_entry(ip_info)
     def populate_from_source_files(self, list_of_source_files):
         """
         <list_of_source_files> is an iterable of file names
